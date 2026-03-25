@@ -61,12 +61,28 @@ abstract class TestCase extends BaseTestCase
         return new ClickHouseSchemaGrammar();
     }
 
+    /**
+     * Create a Connection mock suitable for Blueprint construction.
+     * Stubs getSchemaGrammar() and getSchemaBuilder() so Blueprint's
+     * internal calls (e.g. defaultTimePrecision) don't fail.
+     */
+    protected function createConnectionMock(): Connection
+    {
+        $conn = $this->createMock(Connection::class);
+        $conn->method('getSchemaGrammar')->willReturn($this->createSchemaGrammar());
+
+        // Laravel 12+ Blueprint::defaultTimePrecision() calls
+        // $this->connection->getSchemaBuilder()::$defaultTimePrecision
+        $schemaBuilder = $this->createMock(\Illuminate\Database\Schema\Builder::class);
+        $conn->method('getSchemaBuilder')->willReturn($schemaBuilder);
+
+        return $conn;
+    }
+
     protected function createBlueprint(string $table = 'events'): ClickHouseBlueprint
     {
         if (self::blueprintNeedsConnection()) {
-            $conn = $this->createMock(Connection::class);
-            $conn->method('getSchemaGrammar')->willReturn($this->createSchemaGrammar());
-            return new ClickHouseBlueprint($conn, $table);
+            return new ClickHouseBlueprint($this->createConnectionMock(), $table);
         }
 
         return new ClickHouseBlueprint($table);
