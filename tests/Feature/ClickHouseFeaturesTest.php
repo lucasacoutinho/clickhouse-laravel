@@ -26,7 +26,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
                 score Float64,
                 ts DateTime DEFAULT now(),
                 version UInt32 DEFAULT 1
-            ) ENGINE = ReplacingMergeTree(version) ORDER BY (id) PARTITION BY toYYYYMM(ts)
+            ) ENGINE = ReplacingMergeTree(version) ORDER BY (id) SAMPLE BY intHash32(id) PARTITION BY toYYYYMM(ts)
         SQL);
 
         $conn->statement('DROP TABLE IF EXISTS _test_users');

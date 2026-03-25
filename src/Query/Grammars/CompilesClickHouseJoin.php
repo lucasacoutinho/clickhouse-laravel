@@ -39,6 +39,7 @@ trait CompilesClickHouseJoin
 
             if ($join['subquery'] instanceof Builder) {
                 $parts[] = '(' . $join['subquery']->toSql() . ')';
+                $query->addBinding($join['subquery']->getBindings(), 'join');
             } else {
                 $parts[] = $this->wrapTable($join['table']);
             }

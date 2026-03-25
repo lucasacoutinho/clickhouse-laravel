@@ -181,7 +181,7 @@ class ClickHouseConnection extends Connection
     {
         try {
             $grammar = new $class($this);
-        } catch (\Throwable) {
+        } catch (\TypeError) {
             $grammar = new $class();
         }
 

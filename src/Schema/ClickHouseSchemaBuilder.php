@@ -18,11 +18,11 @@ class ClickHouseSchemaBuilder extends Builder
 
     protected function createBlueprint($table, ?Closure $callback = null): ClickHouseBlueprint
     {
-        // Laravel 13: Blueprint($connection, $table, $callback)
-        // Laravel 10-12: Blueprint($table, $callback, $prefix)
+        // Laravel 12+: Blueprint($connection, $table, $callback)
+        // Laravel 10-11: Blueprint($table, $callback, $prefix)
         try {
             return new ClickHouseBlueprint($this->connection, $table, $callback);
-        } catch (\Throwable) {
+        } catch (\TypeError) {
             $prefix = $this->connection->getConfig('prefix_indexes')
                 ? $this->connection->getConfig('prefix')
                 : '';
@@ -35,9 +35,16 @@ class ClickHouseSchemaBuilder extends Builder
         $grammar = $this->connection->getSchemaGrammar();
         $wrapped = $grammar->wrapTable($this->connection->getTablePrefix() . $table);
 
-        $result = $this->connection->select("EXISTS TABLE {$wrapped}");
+        $result = $this->connection->selectOne("EXISTS TABLE {$wrapped}");
 
-        return !empty($result) && (int) $result[0]->result === 1;
+        if (!$result) {
+            return false;
+        }
+
+        // Handle both object and array results — grab the first column value
+        $row = (array) $result;
+
+        return (int) reset($row) === 1;
     }
 
     public function getTables($schema = null): array
