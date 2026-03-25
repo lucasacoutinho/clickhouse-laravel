@@ -148,11 +148,14 @@ jobs:
           for port in 9000 9001; do
             php -r "
               try {
-                \$pdo = new PDO('clickhouse:host=127.0.0.1;port=${port};dbname=default', 'default', '');
+                \$pdo = new PDO('clickhouse:host=127.0.0.1;port=${port};dbname=default', 'default', '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
                 \$r = \$pdo->query('SELECT 1 AS v');
                 echo 'Node ${port}: Connected! Result: ' . \$r->fetchColumn() . PHP_EOL;
-              } catch (Throwable \$e) {
-                echo 'Node ${port}: FAILED: ' . \$e->getMessage() . PHP_EOL;
+              } catch (PDOException \$e) {
+                echo 'Node ${port}: FAILED' . PHP_EOL;
+                echo '  Message: ' . \$e->getMessage() . PHP_EOL;
+                echo '  Code: ' . \$e->getCode() . PHP_EOL;
+                echo '  ErrorInfo: ' . json_encode(\$e->errorInfo ?? 'none') . PHP_EOL;
                 exit(1);
               }
             "
