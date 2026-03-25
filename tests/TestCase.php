@@ -64,7 +64,9 @@ abstract class TestCase extends BaseTestCase
     protected function createBlueprint(string $table = 'events'): ClickHouseBlueprint
     {
         if (self::blueprintNeedsConnection()) {
-            return new ClickHouseBlueprint($this->createMock(Connection::class), $table);
+            $conn = $this->createMock(Connection::class);
+            $conn->method('getSchemaGrammar')->willReturn($this->createSchemaGrammar());
+            return new ClickHouseBlueprint($conn, $table);
         }
 
         return new ClickHouseBlueprint($table);
