@@ -143,6 +143,37 @@ jobs:
             done
           done
 
+      - name: Debug extension loading
+        run: |
+          php -i | grep -A5 -i "clickhouse"
+          php -r "var_dump(PDO::getAvailableDrivers());"
+          php -r "
+            try {
+              \$pdo = new PDO('clickhouse:host=127.0.0.1;port=9000;dbname=default', 'default', '');
+              echo 'OK' . PHP_EOL;
+            } catch (PDOException \$e) {
+              echo 'PDOException: ' . \$e->getMessage() . PHP_EOL;
+              echo 'Previous: ' . (\$e->getPrevious() ? \$e->getPrevious()->getMessage() : 'none') . PHP_EOL;
+            } catch (Throwable \$e) {
+              echo get_class(\$e) . ': ' . \$e->getMessage() . PHP_EOL;
+            }
+          "
+          # Check if the native client works directly
+          php -r "
+            if (class_exists('ClickHouse\\\Driver\\\Client')) {
+              echo 'ext-clickhouse Client class exists' . PHP_EOL;
+              try {
+                \$opts = new ClickHouse\\\Driver\\\ClientOptions(host: '127.0.0.1', port: 9000);
+                \$client = new ClickHouse\\\Driver\\\Client(\$opts);
+                echo 'Native client connected!' . PHP_EOL;
+              } catch (Throwable \$e) {
+                echo 'Native client failed: ' . \$e->getMessage() . PHP_EOL;
+              }
+            } else {
+              echo 'ext-clickhouse Client class NOT found' . PHP_EOL;
+            }
+          "
+
       - name: Test ClickHouse connectivity
         run: |
           for port in 9000 9001; do
