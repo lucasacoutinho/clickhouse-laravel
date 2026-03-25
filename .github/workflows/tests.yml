@@ -53,6 +53,9 @@ jobs:
     services:
       clickhouse1:
         image: clickhouse/clickhouse-server:24.8
+        env:
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+          CLICKHOUSE_PASSWORD: ""
         ports:
           - 9000:9000
         options: >-
@@ -62,6 +65,9 @@ jobs:
           --health-retries 10
       clickhouse2:
         image: clickhouse/clickhouse-server:24.8
+        env:
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+          CLICKHOUSE_PASSWORD: ""
         ports:
           - 9001:9000
         options: >-
