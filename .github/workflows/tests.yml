@@ -106,6 +106,19 @@ jobs:
           php -m | grep -i clickhouse
           php -r "echo 'PDO drivers: ' . implode(', ', PDO::getAvailableDrivers()) . PHP_EOL;"
 
+      - name: Test ClickHouse connectivity
+        run: |
+          php -r "
+            try {
+              \$pdo = new PDO('clickhouse:host=127.0.0.1;port=9000;dbname=default', 'default', '');
+              \$r = \$pdo->query('SELECT 1 AS v');
+              echo 'Connected! Result: ' . \$r->fetchColumn() . PHP_EOL;
+            } catch (Throwable \$e) {
+              echo 'FAILED: ' . \$e->getMessage() . PHP_EOL;
+              exit(1);
+            }
+          "
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
