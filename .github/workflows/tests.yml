@@ -51,11 +51,19 @@ jobs:
     needs: unit
 
     services:
-      clickhouse:
+      clickhouse1:
         image: clickhouse/clickhouse-server:latest
         ports:
           - 9000:9000
-          - 8123:8123
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      clickhouse2:
+        image: clickhouse/clickhouse-server:latest
+        ports:
+          - 9001:9000
         options: >-
           --health-cmd "clickhouse-client --query 'SELECT 1'"
           --health-interval 5s
@@ -122,18 +130,33 @@ jobs:
           php -m | grep -i clickhouse
           php -r "echo 'PDO drivers: ' . implode(', ', PDO::getAvailableDrivers()) . PHP_EOL;"
 
+      - name: Wait for ClickHouse ports
+        run: |
+          for port in 9000 9001; do
+            echo "Waiting for port ${port}..."
+            for i in $(seq 1 30); do
+              if bash -c "echo > /dev/tcp/127.0.0.1/${port}" 2>/dev/null; then
+                echo "Port ${port} is ready"
+                break
+              fi
+              sleep 1
+            done
+          done
+
       - name: Test ClickHouse connectivity
         run: |
-          php -r "
-            try {
-              \$pdo = new PDO('clickhouse:host=127.0.0.1;port=9000;dbname=default', 'default', '');
-              \$r = \$pdo->query('SELECT 1 AS v');
-              echo 'Connected! Result: ' . \$r->fetchColumn() . PHP_EOL;
-            } catch (Throwable \$e) {
-              echo 'FAILED: ' . \$e->getMessage() . PHP_EOL;
-              exit(1);
-            }
-          "
+          for port in 9000 9001; do
+            php -r "
+              try {
+                \$pdo = new PDO('clickhouse:host=127.0.0.1;port=${port};dbname=default', 'default', '');
+                \$r = \$pdo->query('SELECT 1 AS v');
+                echo 'Node ${port}: Connected! Result: ' . \$r->fetchColumn() . PHP_EOL;
+              } catch (Throwable \$e) {
+                echo 'Node ${port}: FAILED: ' . \$e->getMessage() . PHP_EOL;
+                exit(1);
+              }
+            "
+          done
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
@@ -142,5 +165,6 @@ jobs:
         env:
           CLICKHOUSE_HOST: 127.0.0.1
           CLICKHOUSE_PORT: 9000
+          CLICKHOUSE_PORT_2: 9001
           CLICKHOUSE_DATABASE: default
         run: vendor/bin/phpunit --testsuite Integration
