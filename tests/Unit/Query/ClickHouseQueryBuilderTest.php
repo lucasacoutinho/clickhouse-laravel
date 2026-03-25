@@ -33,6 +33,7 @@ class ClickHouseQueryBuilderTest extends TestCase
             public function commit() {}
             public function rollBack() {}
             public function transactionLevel() { return 0; }
+            public function pretend(\Closure $callback) { return []; }
             public function getDatabaseName() { return 'default'; }
         };
 
