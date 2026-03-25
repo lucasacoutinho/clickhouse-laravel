@@ -9,7 +9,7 @@ class ClickHouseBlueprintTest extends TestCase
 {
     protected function blueprint(string $table = 'events'): ClickHouseBlueprint
     {
-        return new ClickHouseBlueprint($table);
+        return $this->createBlueprint($table);
     }
 
 

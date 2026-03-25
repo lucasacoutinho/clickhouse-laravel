@@ -14,13 +14,12 @@ class ClickHouseSchemaGrammarTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->grammar = new ClickHouseSchemaGrammar();
+        $this->grammar = $this->createSchemaGrammar();
     }
 
     protected function blueprint(string $table = 'events'): ClickHouseBlueprint
     {
-        // Laravel 10-12 constructor: Blueprint($table, $callback, $prefix)
-        return new ClickHouseBlueprint($table);
+        return $this->createBlueprint($table);
     }
 
     protected function compileCreate(ClickHouseBlueprint $blueprint): string
