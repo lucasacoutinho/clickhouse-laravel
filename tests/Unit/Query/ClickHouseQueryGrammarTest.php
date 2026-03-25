@@ -5,25 +5,48 @@ namespace ClickHouse\Laravel\Tests\Unit\Query;
 use ClickHouse\Laravel\Query\ClickHouseQueryBuilder;
 use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Tests\TestCase;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Processors\Processor;
 
 class ClickHouseQueryGrammarTest extends TestCase
 {
     protected ClickHouseQueryGrammar $grammar;
+    protected $mockConnection;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->grammar = new ClickHouseQueryGrammar();
+
+        // Use an anonymous class to avoid mocking final/non-existent methods
+        $grammar = $this->grammar;
+        $this->mockConnection = new class($grammar) implements \Illuminate\Database\ConnectionInterface {
+            public function __construct(private $grammar) {}
+            public function getQueryGrammar() { return $this->grammar; }
+            public function table($table, $as = null) {}
+            public function raw($value) { return new \Illuminate\Database\Query\Expression($value); }
+            public function selectOne($query, $bindings = [], $useReadPdo = true) {}
+            public function scalar($query, $bindings = [], $useReadPdo = true) {}
+            public function select($query, $bindings = [], $useReadPdo = true) { return []; }
+            public function cursor($query, $bindings = [], $useReadPdo = true) {}
+            public function insert($query, $bindings = []) { return true; }
+            public function update($query, $bindings = []) { return 0; }
+            public function delete($query, $bindings = []) { return 0; }
+            public function statement($query, $bindings = []) { return true; }
+            public function affectingStatement($query, $bindings = []) { return 0; }
+            public function unprepared($query) { return true; }
+            public function prepareBindings(array $bindings) { return $bindings; }
+            public function transaction(\Closure $callback, $attempts = 1) { return $callback($this); }
+            public function beginTransaction() {}
+            public function commit() {}
+            public function rollBack() {}
+            public function transactionLevel() { return 0; }
+            public function getDatabaseName() { return 'default'; }
+        };
     }
 
     protected function builder(string $table = 'events'): ClickHouseQueryBuilder
     {
-        $connection = $this->createMock(ConnectionInterface::class);
-        $connection->method('getQueryGrammar')->willReturn($this->grammar);
-
-        $builder = new ClickHouseQueryBuilder($connection, $this->grammar, new Processor());
+        $builder = new ClickHouseQueryBuilder($this->mockConnection, $this->grammar, new Processor());
         $builder->from($table);
 
         return $builder;

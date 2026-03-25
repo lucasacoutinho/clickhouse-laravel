@@ -5,16 +5,36 @@ namespace ClickHouse\Laravel\Tests\Unit\Query;
 use ClickHouse\Laravel\Query\ClickHouseQueryBuilder;
 use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Tests\TestCase;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Processors\Processor;
 
 class ClickHouseQueryBuilderTest extends TestCase
 {
     protected function builder(): ClickHouseQueryBuilder
     {
-        $connection = $this->createMock(ConnectionInterface::class);
         $grammar = new ClickHouseQueryGrammar();
-        $connection->method('getQueryGrammar')->willReturn($grammar);
+        $connection = new class($grammar) implements \Illuminate\Database\ConnectionInterface {
+            public function __construct(private $grammar) {}
+            public function getQueryGrammar() { return $this->grammar; }
+            public function table($table, $as = null) {}
+            public function raw($value) { return new \Illuminate\Database\Query\Expression($value); }
+            public function selectOne($query, $bindings = [], $useReadPdo = true) {}
+            public function scalar($query, $bindings = [], $useReadPdo = true) {}
+            public function select($query, $bindings = [], $useReadPdo = true) { return []; }
+            public function cursor($query, $bindings = [], $useReadPdo = true) {}
+            public function insert($query, $bindings = []) { return true; }
+            public function update($query, $bindings = []) { return 0; }
+            public function delete($query, $bindings = []) { return 0; }
+            public function statement($query, $bindings = []) { return true; }
+            public function affectingStatement($query, $bindings = []) { return 0; }
+            public function unprepared($query) { return true; }
+            public function prepareBindings(array $bindings) { return $bindings; }
+            public function transaction(\Closure $callback, $attempts = 1) { return $callback($this); }
+            public function beginTransaction() {}
+            public function commit() {}
+            public function rollBack() {}
+            public function transactionLevel() { return 0; }
+            public function getDatabaseName() { return 'default'; }
+        };
 
         return new ClickHouseQueryBuilder($connection, $grammar, new Processor());
     }

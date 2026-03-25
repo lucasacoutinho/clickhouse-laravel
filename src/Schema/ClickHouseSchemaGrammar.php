@@ -131,27 +131,27 @@ class ClickHouseSchemaGrammar extends Grammar
 
     protected function typeInteger(Fluent $column): string
     {
-        return 'Int32';
+        return ($column->unsigned ?? false) ? 'UInt32' : 'Int32';
     }
 
     protected function typeBigInteger(Fluent $column): string
     {
-        return 'Int64';
+        return ($column->unsigned ?? false) ? 'UInt64' : 'Int64';
     }
 
     protected function typeSmallInteger(Fluent $column): string
     {
-        return 'Int16';
+        return ($column->unsigned ?? false) ? 'UInt16' : 'Int16';
     }
 
     protected function typeTinyInteger(Fluent $column): string
     {
-        return 'Int8';
+        return ($column->unsigned ?? false) ? 'UInt8' : 'Int8';
     }
 
     protected function typeMediumInteger(Fluent $column): string
     {
-        return 'Int32';
+        return ($column->unsigned ?? false) ? 'UInt32' : 'Int32';
     }
 
     protected function typeFloat(Fluent $column): string
