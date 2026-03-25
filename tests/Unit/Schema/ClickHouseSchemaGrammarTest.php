@@ -9,22 +9,22 @@ use Illuminate\Support\Fluent;
 
 class ClickHouseSchemaGrammarTest extends TestCase
 {
-    protected ClickHouseSchemaGrammar $grammar;
-
-    protected function setUp(): void
+    protected function grammar(): ClickHouseSchemaGrammar
     {
-        parent::setUp();
-        $this->grammar = $this->createSchemaGrammar();
+        return $this->clickhouse()->getSchemaGrammar();
     }
 
     protected function blueprint(string $table = 'events'): ClickHouseBlueprint
     {
-        return $this->createBlueprint($table);
+        $schemaBuilder = $this->clickhouse()->getSchemaBuilder();
+        $method = new \ReflectionMethod($schemaBuilder, 'createBlueprint');
+
+        return $method->invoke($schemaBuilder, $table);
     }
 
     protected function compileCreate(ClickHouseBlueprint $blueprint): string
     {
-        return $this->grammar->compileCreate($blueprint, new Fluent(['name' => 'create']));
+        return $this->grammar()->compileCreate($blueprint, new Fluent(['name' => 'create']));
     }
 
 
@@ -139,14 +139,14 @@ class ClickHouseSchemaGrammarTest extends TestCase
     public function testCompileDrop(): void
     {
         $bp = $this->blueprint();
-        $sql = $this->grammar->compileDrop($bp, new Fluent());
+        $sql = $this->grammar()->compileDrop($bp, new Fluent());
         $this->assertSame('DROP TABLE `events`', $sql);
     }
 
     public function testCompileDropIfExists(): void
     {
         $bp = $this->blueprint();
-        $sql = $this->grammar->compileDropIfExists($bp, new Fluent());
+        $sql = $this->grammar()->compileDropIfExists($bp, new Fluent());
         $this->assertSame('DROP TABLE IF EXISTS `events`', $sql);
     }
 
@@ -157,7 +157,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $bp->string('email');
         $bp->integer('age');
 
-        $sql = $this->grammar->compileAdd($bp, new Fluent());
+        $sql = $this->grammar()->compileAdd($bp, new Fluent());
 
         $this->assertStringContainsString('ALTER TABLE `events` ADD COLUMN `email` String', $sql);
         $this->assertStringContainsString('ALTER TABLE `events` ADD COLUMN `age` Int32', $sql);
@@ -168,7 +168,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
     {
         $bp = $this->blueprint();
         $command = new Fluent(['columns' => ['email', 'age']]);
-        $sql = $this->grammar->compileDropColumn($bp, $command);
+        $sql = $this->grammar()->compileDropColumn($bp, $command);
 
         $this->assertStringContainsString('ALTER TABLE `events`', $sql);
         $this->assertStringContainsString('DROP COLUMN `email`', $sql);
@@ -180,7 +180,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
     {
         $bp = $this->blueprint('old_table');
         $command = new Fluent(['to' => 'new_table']);
-        $sql = $this->grammar->compileRename($bp, $command);
+        $sql = $this->grammar()->compileRename($bp, $command);
 
         $this->assertSame('RENAME TABLE `old_table` TO `new_table`', $sql);
     }

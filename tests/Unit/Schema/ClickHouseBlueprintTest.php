@@ -9,7 +9,10 @@ class ClickHouseBlueprintTest extends TestCase
 {
     protected function blueprint(string $table = 'events'): ClickHouseBlueprint
     {
-        return $this->createBlueprint($table);
+        $schemaBuilder = $this->clickhouse()->getSchemaBuilder();
+        $method = new \ReflectionMethod($schemaBuilder, 'createBlueprint');
+
+        return $method->invoke($schemaBuilder, $table);
     }
 
 
