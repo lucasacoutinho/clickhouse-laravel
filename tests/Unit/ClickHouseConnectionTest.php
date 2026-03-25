@@ -23,14 +23,12 @@ class ClickHouseConnectionTest extends TestCase
         return new ClickHouseConnection($pdo, 'default', '', $config);
     }
 
- Driver name ---
 
     public function testGetDriverName(): void
     {
         $this->assertSame('clickhouse', $this->connection()->getDriverName());
     }
 
- Transactions are no-ops ---
 
     public function testTransactionExecutesCallback(): void
     {
@@ -68,7 +66,6 @@ class ClickHouseConnectionTest extends TestCase
         $this->assertSame(0, $this->connection()->transactionLevel());
     }
 
- Grammars ---
 
     public function testDefaultQueryGrammarIsCorrectType(): void
     {
@@ -84,7 +81,6 @@ class ClickHouseConnectionTest extends TestCase
         $this->assertInstanceOf(ClickHouseSchemaBuilder::class, $builder);
     }
 
- Query builder ---
 
     public function testQueryReturnsClickHouseQueryBuilder(): void
     {
@@ -114,7 +110,6 @@ class ClickHouseConnectionTest extends TestCase
         $this->assertSame('events', $builder->from);
     }
 
- Cluster ---
 
     public function testClusterIsNullWithoutConfig(): void
     {

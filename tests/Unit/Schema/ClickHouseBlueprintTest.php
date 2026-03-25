@@ -12,7 +12,6 @@ class ClickHouseBlueprintTest extends TestCase
         return new ClickHouseBlueprint($table);
     }
 
- Table properties ---
 
     public function testOrderBySetsColumns(): void
     {
@@ -64,7 +63,6 @@ class ClickHouseBlueprintTest extends TestCase
         $this->assertSame($bp, $result);
     }
 
- Column types map to correct internal types ---
 
     public function testUint8(): void
     {
@@ -151,7 +149,6 @@ class ClickHouseBlueprintTest extends TestCase
         $this->assertSame('ipAddress', $col->get('type'));
     }
 
- Compound types via clickhouseType ---
 
     public function testClickhouseTypeRaw(): void
     {
@@ -217,7 +214,6 @@ class ClickHouseBlueprintTest extends TestCase
         $this->assertSame('UInt128', $col->get('clickhouse_type'));
     }
 
- ID override ---
 
     public function testIdReturnsUint64(): void
     {
@@ -226,7 +222,6 @@ class ClickHouseBlueprintTest extends TestCase
         $this->assertSame('unsignedBigInteger', $col->get('type'));
     }
 
- Unsupported operations ---
 
     public function testForeignThrows(): void
     {

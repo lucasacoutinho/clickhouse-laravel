@@ -28,7 +28,6 @@ class ClickHouseSchemaGrammarTest extends TestCase
         return $this->grammar->compileCreate($blueprint, new Fluent(['name' => 'create']));
     }
 
- CREATE TABLE ---
 
     public function testCreateMergeTree(): void
     {
@@ -137,7 +136,6 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('SETTINGS index_granularity = 4096', $sql);
     }
 
- DROP ---
 
     public function testCompileDrop(): void
     {
@@ -153,7 +151,6 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertSame('DROP TABLE IF EXISTS `events`', $sql);
     }
 
- ADD COLUMN ---
 
     public function testCompileAdd(): void
     {
@@ -167,7 +164,6 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('ALTER TABLE `events` ADD COLUMN `age` Int32', $sql);
     }
 
- DROP COLUMN ---
 
     public function testCompileDropColumn(): void
     {
@@ -180,7 +176,6 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DROP COLUMN `age`', $sql);
     }
 
- RENAME ---
 
     public function testCompileRename(): void
     {
@@ -191,7 +186,6 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertSame('RENAME TABLE `old_table` TO `new_table`', $sql);
     }
 
- Column types ---
 
     public function testTypeString(): void
     {
