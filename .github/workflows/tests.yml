@@ -72,34 +72,39 @@ jobs:
           extensions: pdo
           coverage: none
 
-      - name: Build ext-clickhouse
+      - name: Clone extensions
         env:
           GH_TOKEN: ${{ secrets.PDO_GITHUB_TOKEN }}
         run: |
-          git clone --recursive https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git /tmp/ext-clickhouse
-          cd /tmp/ext-clickhouse
+          git clone --recursive "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git" /tmp/build/ext-clickhouse
+          git clone "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse-pdo.git" /tmp/build/ext-clickhouse-pdo
+
+      - name: Build ext-clickhouse
+        run: |
+          cd /tmp/build/ext-clickhouse
           phpize
           ./configure
           make -j$(nproc)
           sudo make install
-          echo "extension=clickhouse.so" | sudo tee /etc/php/8.3/cli/conf.d/30-clickhouse.ini
 
       - name: Build ext-clickhouse-pdo
-        env:
-          GH_TOKEN: ${{ secrets.PDO_GITHUB_TOKEN }}
         run: |
-          git clone https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse-pdo.git /tmp/ext-clickhouse-pdo
-          cd /tmp/ext-clickhouse-pdo
+          cd /tmp/build/ext-clickhouse-pdo
           phpize
-          ./configure
+          ./configure --enable-pdo-clickhouse
           make -j$(nproc)
           sudo make install
-          echo "extension=pdo_clickhouse.so" | sudo tee /etc/php/8.3/cli/conf.d/31-pdo_clickhouse.ini
+
+      - name: Enable extensions
+        run: |
+          PHP_INI_DIR=$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')
+          echo "extension=clickhouse.so" | sudo tee "${PHP_INI_DIR}/30-clickhouse.ini"
+          echo "extension=pdo_clickhouse.so" | sudo tee "${PHP_INI_DIR}/31-pdo_clickhouse.ini"
 
       - name: Verify extensions
         run: |
-          php -m | grep clickhouse
-          php -m | grep pdo_clickhouse
+          php -m | grep -i clickhouse
+          php -r "echo 'PDO drivers: ' . implode(', ', PDO::getAvailableDrivers()) . PHP_EOL;"
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
