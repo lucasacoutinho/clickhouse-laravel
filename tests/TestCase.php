@@ -5,46 +5,57 @@ namespace ClickHouse\Laravel\Tests;
 use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Schema\ClickHouseBlueprint;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaGrammar;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Schema\Blueprint;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
     /**
-     * Create a query grammar, handling Laravel 10-12 vs 13 constructor differences.
+     * Detect if Grammar constructor requires a Connection (Laravel 13+).
      */
+    private function grammarRequiresConnection(): bool
+    {
+        $ctor = new \ReflectionMethod(\Illuminate\Database\Grammar::class, '__construct');
+        return $ctor->getNumberOfRequiredParameters() > 0;
+    }
+
+    /**
+     * Detect if Blueprint constructor's first arg is Connection (Laravel 13+).
+     */
+    private function blueprintRequiresConnection(): bool
+    {
+        $ctor = new \ReflectionMethod(Blueprint::class, '__construct');
+        $firstParam = $ctor->getParameters()[0] ?? null;
+        if (!$firstParam) return false;
+        $type = $firstParam->getType();
+        return $type instanceof \ReflectionNamedType && $type->getName() === Connection::class;
+    }
+
     protected function createQueryGrammar(): ClickHouseQueryGrammar
     {
-        try {
-            return new ClickHouseQueryGrammar($this->createMock(\Illuminate\Database\Connection::class));
-        } catch (\Throwable) {
-            return new ClickHouseQueryGrammar();
+        if ($this->grammarRequiresConnection()) {
+            return new ClickHouseQueryGrammar($this->createMock(Connection::class));
         }
+
+        return new ClickHouseQueryGrammar();
     }
 
-    /**
-     * Create a schema grammar, handling Laravel 10-12 vs 13 constructor differences.
-     */
     protected function createSchemaGrammar(): ClickHouseSchemaGrammar
     {
-        try {
-            return new ClickHouseSchemaGrammar($this->createMock(\Illuminate\Database\Connection::class));
-        } catch (\Throwable) {
-            return new ClickHouseSchemaGrammar();
+        if ($this->grammarRequiresConnection()) {
+            return new ClickHouseSchemaGrammar($this->createMock(Connection::class));
         }
+
+        return new ClickHouseSchemaGrammar();
     }
 
-    /**
-     * Create a blueprint, handling Laravel 10-12 vs 13 constructor differences.
-     * Laravel 13: Blueprint($connection, $table)
-     * Laravel 10-12: Blueprint($table, $callback, $prefix)
-     */
     protected function createBlueprint(string $table = 'events'): ClickHouseBlueprint
     {
-        try {
-            $conn = $this->createMock(\Illuminate\Database\Connection::class);
-            return new ClickHouseBlueprint($conn, $table);
-        } catch (\Throwable) {
-            return new ClickHouseBlueprint($table);
+        if ($this->blueprintRequiresConnection()) {
+            return new ClickHouseBlueprint($this->createMock(Connection::class), $table);
         }
+
+        return new ClickHouseBlueprint($table);
     }
 }
