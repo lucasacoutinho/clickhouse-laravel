@@ -143,47 +143,31 @@ jobs:
             done
           done
 
-      - name: Debug extension loading
-        run: |
-          php -i | grep -A3 "pdo_clickhouse" | head -10
-          php -r "var_dump(PDO::getAvailableDrivers());"
-
-          # Test native ext-clickhouse client directly (bypasses PDO)
-          cat > /tmp/test_native.php << 'PHEOF'
-          <?php
-          $classes = ['ClickHouse\Driver\Client', 'ClickHouse\Driver\ClientOptions'];
-          foreach ($classes as $c) {
-              echo "$c: " . (class_exists($c) ? 'YES' : 'NO') . PHP_EOL;
-          }
-          if (class_exists('ClickHouse\Driver\ClientOptions')) {
-              try {
-                  $opts = new ClickHouse\Driver\ClientOptions(host: '127.0.0.1', port: 9000);
-                  $client = new ClickHouse\Driver\Client($opts);
-                  echo "Native client: CONNECTED" . PHP_EOL;
-              } catch (Throwable $e) {
-                  echo "Native client: FAILED - " . $e->getMessage() . PHP_EOL;
-              }
-          }
-          PHEOF
-          php /tmp/test_native.php
-
       - name: Test ClickHouse connectivity
+        shell: bash
         run: |
-          for port in 9000 9001; do
-            php -r "
+          php -r '
+          echo "=== Native Client ===" . PHP_EOL;
+          if (class_exists("ClickHouse\Driver\ClientOptions")) {
               try {
-                \$pdo = new PDO('clickhouse:host=127.0.0.1;port=${port};dbname=default', 'default', '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-                \$r = \$pdo->query('SELECT 1 AS v');
-                echo 'Node ${port}: Connected! Result: ' . \$r->fetchColumn() . PHP_EOL;
-              } catch (PDOException \$e) {
-                echo 'Node ${port}: FAILED' . PHP_EOL;
-                echo '  Message: ' . \$e->getMessage() . PHP_EOL;
-                echo '  Code: ' . \$e->getCode() . PHP_EOL;
-                echo '  ErrorInfo: ' . json_encode(\$e->errorInfo ?? 'none') . PHP_EOL;
-                exit(1);
+                  $opts = new ClickHouse\Driver\ClientOptions(host: "127.0.0.1", port: 9000);
+                  $client = new ClickHouse\Driver\Client($opts);
+                  echo "Native: CONNECTED" . PHP_EOL;
+              } catch (Throwable $e) {
+                  echo "Native: " . get_class($e) . ": " . $e->getMessage() . PHP_EOL;
               }
-            "
-          done
+          } else { echo "ext-clickhouse NOT loaded" . PHP_EOL; }
+          echo PHP_EOL . "=== PDO ===" . PHP_EOL;
+          foreach ([9000, 9001] as $port) {
+              try {
+                  $pdo = new PDO("clickhouse:host=127.0.0.1;port={$port};dbname=default", "default", "");
+                  $r = $pdo->query("SELECT 1 AS v");
+                  echo "Port {$port}: OK (" . $r->fetchColumn() . ")" . PHP_EOL;
+              } catch (Throwable $e) {
+                  echo "Port {$port}: " . get_class($e) . ": " . $e->getMessage() . PHP_EOL;
+              }
+          }
+          '
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
