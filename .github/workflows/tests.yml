@@ -72,31 +72,47 @@ jobs:
           extensions: pdo
           coverage: none
 
-      - name: Clone extensions
+      - name: Get extension versions for cache key
+        id: ext-versions
+        env:
+          GH_TOKEN: ${{ secrets.PDO_GITHUB_TOKEN }}
+        run: |
+          EXT_SHA=$(git ls-remote "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git" HEAD | cut -f1)
+          PDO_SHA=$(git ls-remote "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse-pdo.git" HEAD | cut -f1)
+          PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+          echo "cache-key=ext-clickhouse-${PHP_VER}-${EXT_SHA}-${PDO_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache compiled extensions
+        id: ext-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ext-compiled
+          key: ${{ steps.ext-versions.outputs.cache-key }}
+
+      - name: Clone and build extensions
+        if: steps.ext-cache.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.PDO_GITHUB_TOKEN }}
         run: |
           git clone --recursive "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git" /tmp/build/ext-clickhouse
           git clone "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse-pdo.git" /tmp/build/ext-clickhouse-pdo
 
-      - name: Build ext-clickhouse
-        run: |
           cd /tmp/build/ext-clickhouse
-          phpize
-          ./configure
-          make -j$(nproc)
-          sudo make install
+          phpize && ./configure && make -j$(nproc)
 
-      - name: Build ext-clickhouse-pdo
-        run: |
           cd /tmp/build/ext-clickhouse-pdo
-          phpize
-          ./configure --enable-pdo-clickhouse
-          make -j$(nproc)
-          sudo make install
+          phpize && ./configure --enable-pdo-clickhouse && make -j$(nproc)
 
-      - name: Enable extensions
+          mkdir -p /tmp/ext-compiled
+          cp /tmp/build/ext-clickhouse/modules/clickhouse.so /tmp/ext-compiled/
+          cp /tmp/build/ext-clickhouse-pdo/modules/pdo_clickhouse.so /tmp/ext-compiled/
+
+      - name: Install extensions
         run: |
+          PHP_EXT_DIR=$(php -r 'echo ini_get("extension_dir");')
+          sudo cp /tmp/ext-compiled/clickhouse.so "${PHP_EXT_DIR}/"
+          sudo cp /tmp/ext-compiled/pdo_clickhouse.so "${PHP_EXT_DIR}/"
+
           PHP_INI_DIR=$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')
           echo "extension=clickhouse.so" | sudo tee "${PHP_INI_DIR}/30-clickhouse.ini"
           echo "extension=pdo_clickhouse.so" | sudo tee "${PHP_INI_DIR}/31-pdo_clickhouse.ini"
