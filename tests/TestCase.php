@@ -6,35 +6,46 @@ use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Schema\ClickHouseBlueprint;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaGrammar;
 use Illuminate\Database\Connection;
-use Illuminate\Database\Schema\Blueprint;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
     /**
-     * Detect if Grammar constructor requires a Connection (Laravel 13+).
+     * Check if the base Grammar class requires a Connection in its constructor.
+     * Laravel 13+: Grammar($connection) — required parameter.
+     * Laravel 10-12: Grammar() — no constructor or no required params.
      */
-    private function grammarRequiresConnection(): bool
+    private static function grammarNeedsConnection(): bool
     {
-        $ctor = new \ReflectionMethod(\Illuminate\Database\Grammar::class, '__construct');
-        return $ctor->getNumberOfRequiredParameters() > 0;
+        try {
+            $ctor = new \ReflectionMethod(\Illuminate\Database\Grammar::class, '__construct');
+            return $ctor->getNumberOfRequiredParameters() > 0;
+        } catch (\ReflectionException) {
+            return false;
+        }
     }
 
     /**
-     * Detect if Blueprint constructor's first arg is Connection (Laravel 13+).
+     * Check if Blueprint's first constructor param is a Connection.
+     * Laravel 13+: Blueprint($connection, $table)
+     * Laravel 10-12: Blueprint($table, $callback, $prefix)
      */
-    private function blueprintRequiresConnection(): bool
+    private static function blueprintNeedsConnection(): bool
     {
-        $ctor = new \ReflectionMethod(Blueprint::class, '__construct');
-        $firstParam = $ctor->getParameters()[0] ?? null;
-        if (!$firstParam) return false;
-        $type = $firstParam->getType();
-        return $type instanceof \ReflectionNamedType && $type->getName() === Connection::class;
+        try {
+            $ctor = new \ReflectionMethod(\Illuminate\Database\Schema\Blueprint::class, '__construct');
+            $first = $ctor->getParameters()[0] ?? null;
+            if (!$first) return false;
+            $type = $first->getType();
+            return $type instanceof \ReflectionNamedType && $type->getName() === Connection::class;
+        } catch (\ReflectionException) {
+            return false;
+        }
     }
 
     protected function createQueryGrammar(): ClickHouseQueryGrammar
     {
-        if ($this->grammarRequiresConnection()) {
+        if (self::grammarNeedsConnection()) {
             return new ClickHouseQueryGrammar($this->createMock(Connection::class));
         }
 
@@ -43,7 +54,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function createSchemaGrammar(): ClickHouseSchemaGrammar
     {
-        if ($this->grammarRequiresConnection()) {
+        if (self::grammarNeedsConnection()) {
             return new ClickHouseSchemaGrammar($this->createMock(Connection::class));
         }
 
@@ -52,7 +63,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function createBlueprint(string $table = 'events'): ClickHouseBlueprint
     {
-        if ($this->blueprintRequiresConnection()) {
+        if (self::blueprintNeedsConnection()) {
             return new ClickHouseBlueprint($this->createMock(Connection::class), $table);
         }
 
