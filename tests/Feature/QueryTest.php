@@ -32,7 +32,7 @@ class QueryTest extends FeatureTestCase
         parent::tearDown();
     }
 
-    protected function seed(int $count = 10): void
+    protected function seedRows(int $count = 10): void
     {
         $rows = [];
         for ($i = 1; $i <= $count; $i++) {
@@ -74,7 +74,7 @@ class QueryTest extends FeatureTestCase
 
     public function testWhereAndCount(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $count = DB::connection('clickhouse')
             ->table('_test_events')
@@ -86,7 +86,7 @@ class QueryTest extends FeatureTestCase
 
     public function testWhereIn(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -98,7 +98,7 @@ class QueryTest extends FeatureTestCase
 
     public function testWhereBetween(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -110,7 +110,7 @@ class QueryTest extends FeatureTestCase
 
     public function testGroupByAndHaving(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -124,7 +124,7 @@ class QueryTest extends FeatureTestCase
 
     public function testOrderByAndLimit(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -138,7 +138,7 @@ class QueryTest extends FeatureTestCase
 
     public function testLimitAndOffset(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -153,7 +153,7 @@ class QueryTest extends FeatureTestCase
 
     public function testSelectRawWithAggregates(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $result = DB::connection('clickhouse')
             ->table('_test_events')
@@ -166,7 +166,7 @@ class QueryTest extends FeatureTestCase
 
     public function testUnionAll(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $conn = DB::connection('clickhouse');
 
@@ -190,7 +190,7 @@ class QueryTest extends FeatureTestCase
 
     public function testDeleteWithWhere(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         DB::connection('clickhouse')
             ->table('_test_events')
@@ -204,7 +204,7 @@ class QueryTest extends FeatureTestCase
 
     public function testTruncate(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         DB::connection('clickhouse')->table('_test_events')->truncate();
 
@@ -213,7 +213,7 @@ class QueryTest extends FeatureTestCase
 
     public function testUpdate(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         DB::connection('clickhouse')
             ->table('_test_events')
@@ -226,7 +226,7 @@ class QueryTest extends FeatureTestCase
 
     public function testGroupedOrWhere(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -240,7 +240,7 @@ class QueryTest extends FeatureTestCase
 
     public function testSubqueryInWhereIn(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $sub = DB::connection('clickhouse')
             ->table('_test_events')
@@ -257,7 +257,7 @@ class QueryTest extends FeatureTestCase
 
     public function testSelectSubquery(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
@@ -274,7 +274,7 @@ class QueryTest extends FeatureTestCase
 
     public function testSettingsApplied(): void
     {
-        $this->seed(10);
+        $this->seedRows(10);
 
         $rows = DB::connection('clickhouse')
             ->table('_test_events')
