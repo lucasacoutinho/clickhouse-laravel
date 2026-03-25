@@ -784,9 +784,10 @@ class ClickHouseQueryGrammarTest extends TestCase
             $this->builder('orders')
                 ->anyLeftJoin($sub, 'user_id', alias: 'u')
         );
-        $this->assertStringContainsString('ANY LEFT JOIN (select', strtolower($sql));
-        $this->assertStringContainsString('AS `u`', $sql);
-        $this->assertStringContainsString('USING (`user_id`)', $sql);
+        $lower = strtolower($sql);
+        $this->assertStringContainsString('any left join (select', $lower);
+        $this->assertStringContainsString('as `u`', $lower);
+        $this->assertStringContainsString('using (`user_id`)', $lower);
     }
 
     public function testJoinSubqueryWithOnCondition(): void
@@ -796,9 +797,10 @@ class ClickHouseQueryGrammarTest extends TestCase
             $this->builder('orders')
                 ->allInnerJoin($sub, alias: 'u', on: [['orders.user_id', '=', 'u.id']])
         );
-        $this->assertStringContainsString('ALL INNER JOIN (select', strtolower($sql));
-        $this->assertStringContainsString('AS `u`', $sql);
-        $this->assertStringContainsString('ON `orders`.`user_id` = `u`.`id`', $sql);
+        $lower = strtolower($sql);
+        $this->assertStringContainsString('all inner join (select', $lower);
+        $this->assertStringContainsString('as `u`', $lower);
+        $this->assertStringContainsString('on `orders`.`user_id` = `u`.`id`', $lower);
     }
 
     public function testInsertFormat(): void

@@ -30,7 +30,7 @@ trait HasWithFill
         Expression|string|null $to = null,
         Expression|string|null $step = null,
     ): static {
-        $lastIndex = count($this->orders) - 1;
+        $lastIndex = count($this->orders ?? []) - 1;
 
         if ($lastIndex < 0) {
             return $this;
@@ -59,7 +59,7 @@ trait HasWithFill
      */
     public function withFillRaw(string $expression): static
     {
-        $lastIndex = count($this->orders) - 1;
+        $lastIndex = count($this->orders ?? []) - 1;
 
         if ($lastIndex < 0) {
             return $this;
