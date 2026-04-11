@@ -20,6 +20,16 @@ class ClickHouseConnector extends Connector implements ConnectorInterface
             $dsn .= ';compression=' . $config['compression'];
         }
 
+        if (!empty($config['ssl'])) {
+            $dsn .= ';ssl=true';
+            if (!empty($config['ssl_skip_verify'])) {
+                $dsn .= ';skip_verify=true';
+            }
+            if (!empty($config['ssl_ca_path'])) {
+                $dsn .= ';ca_path=' . $config['ssl_ca_path'];
+            }
+        }
+
         return $dsn;
     }
 
@@ -33,6 +43,17 @@ class ClickHouseConnector extends Connector implements ConnectorInterface
 
         if (isset($config['timeout'])) {
             $options[PDO::ATTR_TIMEOUT] = (int) $config['timeout'];
+        }
+
+        /* Persistent connections reuse the underlying ClickHouse native
+         * TCP handshake across PHP-FPM requests, which can be a sizable
+         * wall-time win on short API responses that would otherwise
+         * repay the auth / database-selection handshake for every
+         * request. Opt-in via the 'persistent' connection flag so
+         * operators who prefer per-request isolation can stay on the
+         * default behavior. */
+        if (!empty($config['persistent'])) {
+            $options[PDO::ATTR_PERSISTENT] = true;
         }
 
         return new PDO(
