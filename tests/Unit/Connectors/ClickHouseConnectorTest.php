@@ -58,4 +58,45 @@ class ClickHouseConnectorTest extends TestCase
         $dsn = $this->getDsn([]);
         $this->assertStringNotContainsString('compression', $dsn);
     }
+
+    public function testDsnWithSsl(): void
+    {
+        $dsn = $this->getDsn(['ssl' => true]);
+        $this->assertSame('clickhouse:host=localhost;port=9000;dbname=default;ssl=true', $dsn);
+    }
+
+    public function testDsnWithSslAndSkipVerify(): void
+    {
+        $dsn = $this->getDsn(['ssl' => true, 'ssl_skip_verify' => true]);
+        $this->assertStringContainsString('ssl=true', $dsn);
+        $this->assertStringContainsString('skip_verify=true', $dsn);
+    }
+
+    public function testDsnWithSslAndCaPath(): void
+    {
+        $dsn = $this->getDsn(['ssl' => true, 'ssl_ca_path' => '/etc/ssl/certs']);
+        $this->assertStringContainsString('ssl=true', $dsn);
+        $this->assertStringContainsString('ca_path=/etc/ssl/certs', $dsn);
+    }
+
+    public function testDsnWithSslFullConfig(): void
+    {
+        $dsn = $this->getDsn([
+            'host' => 'abc123.clickhouse.cloud',
+            'port' => 9440,
+            'database' => 'default',
+            'ssl' => true,
+        ]);
+
+        $this->assertSame(
+            'clickhouse:host=abc123.clickhouse.cloud;port=9440;dbname=default;ssl=true',
+            $dsn,
+        );
+    }
+
+    public function testDsnWithoutSslHasNoParam(): void
+    {
+        $dsn = $this->getDsn([]);
+        $this->assertStringNotContainsString('ssl', $dsn);
+    }
 }
