@@ -1,7 +1,10 @@
 /vendor/
+/benchmark-results/
+/dist/
 /composer.lock
 /.phpunit.cache/
 /phpunit.xml
+/.claude/
 /.idea/
 /.vscode/
 *.swp

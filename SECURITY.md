@@ -2,8 +2,12 @@
 
 ## Supported versions
 
-Until the first tagged release, security fixes are applied to `main`. After a
-stable release, only the latest stable major line will receive security fixes.
+Only the latest stable major line receives security fixes.
+
+| Version | Supported |
+| --- | --- |
+| 1.x | Yes |
+| < 1.0 | No |
 
 ## Reporting a vulnerability
 

@@ -1,18 +1,23 @@
 {
-    "name": "clickhouse/laravel",
+    "name": "lucasacoutinho/clickhouse-laravel",
     "description": "ClickHouse database driver for Laravel — native TCP protocol, typed inserts, zero cURL dependency",
     "type": "library",
     "license": "MIT",
     "homepage": "https://github.com/lucasacoutinho/clickhouse-laravel",
     "keywords": ["clickhouse", "laravel", "database", "analytics", "pdo", "native"],
+    "authors": [
+        {
+            "name": "Lucas Coutinho",
+            "homepage": "https://github.com/lucasacoutinho",
+            "role": "Maintainer"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "ext-clickhouse": ">=1.2.0",
         "ext-pdo": "*",
         "ext-pdo_clickhouse": ">=1.2.0",
-        "illuminate/concurrency": "^12.0|^13.0",
-        "illuminate/database": "^12.0|^13.0",
-        "illuminate/support": "^12.0|^13.0"
+        "laravel/framework": "^12.0|^13.0"
     },
     "require-dev": {
         "laravel/pint": "^1.13",
@@ -59,6 +64,31 @@
     "support": {
         "issues": "https://github.com/lucasacoutinho/clickhouse-laravel/issues",
         "source": "https://github.com/lucasacoutinho/clickhouse-laravel"
+    },
+    "archive": {
+        "name": "clickhouse-laravel",
+        "exclude": [
+            "/.github",
+            "/benchmarks",
+            "/tests",
+            "/.claude",
+            "/.dockerignore",
+            "/.editorconfig",
+            "/.gitattributes",
+            "/.gitignore",
+            "/.phpunit.cache",
+            "/benchmark-results",
+            "/CLAUDE.md",
+            "/CONTRIBUTING.md",
+            "/composer.lock",
+            "/dist",
+            "/phpstan.neon.dist",
+            "/phpunit.xml.dist",
+            "/pint.json",
+            "/psalm.xml",
+            "/RELEASING.md",
+            "/vendor"
+        ]
     },
     "config": {
         "sort-packages": true

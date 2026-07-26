@@ -1,0 +1,9 @@
+.git
+.claude
+.phpunit.cache
+/benchmark-results
+CLAUDE.md
+composer.lock
+dist
+phpunit.xml
+vendor

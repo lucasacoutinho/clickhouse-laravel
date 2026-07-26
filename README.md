@@ -1,14 +1,15 @@
 # ClickHouse Laravel
 
+[![Tests](https://github.com/lucasacoutinho/clickhouse-laravel/actions/workflows/tests.yml/badge.svg)](https://github.com/lucasacoutinho/clickhouse-laravel/actions/workflows/tests.yml)
+[![Latest Stable Version](https://img.shields.io/packagist/v/lucasacoutinho/clickhouse-laravel.svg)](https://packagist.org/packages/lucasacoutinho/clickhouse-laravel)
+[![Total Downloads](https://img.shields.io/packagist/dt/lucasacoutinho/clickhouse-laravel.svg)](https://packagist.org/packages/lucasacoutinho/clickhouse-laravel)
+[![License](https://img.shields.io/packagist/l/lucasacoutinho/clickhouse-laravel.svg)](LICENSE)
+
 A Laravel database driver for ClickHouse over the native TCP protocol. It uses
 [`ext-pdo_clickhouse`](https://github.com/lucasacoutinho/ext-clickhouse-pdo) and
 [`ext-clickhouse`](https://github.com/lucasacoutinho/ext-clickhouse), so Laravel's
 query builder, Eloquent, query logging, bindings, and schema builder run without
 an HTTP or cURL transport.
-
-> This repository is currently private and has not been published on Packagist.
-> Install it from an authenticated VCS repository until the first public,
-> tagged release is available.
 
 ## Requirements
 
@@ -23,13 +24,18 @@ Cloud, commonly use port `9440`.
 
 ## Installation
 
-Configure the private repository once:
+Install the two native extensions first. They are available as
+[PIE](https://github.com/php/pie)-compatible packages:
 
 ```bash
-composer config repositories.clickhouse-laravel vcs \
-    git@github.com:lucasacoutinho/clickhouse-laravel.git
+pie install lucasacoutinho/ext-clickhouse
+pie install lucasacoutinho/ext-clickhouse-pdo
+```
 
-composer require clickhouse/laravel:dev-main
+Then install the Laravel integration:
+
+```bash
+composer require lucasacoutinho/clickhouse-laravel
 ```
 
 Laravel discovers `ClickHouseServiceProvider` automatically. Publish the
@@ -563,6 +569,17 @@ Legacy shared code can explicitly opt into non-transactional passthrough:
 Passthrough only runs the callback. It does not provide BEGIN, COMMIT, rollback,
 or atomicity.
 
+## Performance
+
+The package uses ClickHouse's native TCP protocol through `pdo_clickhouse`.
+A reproducible Docker microbenchmark compares that path with
+`laravel-clickhouse/laravel-clickhouse`'s default Guzzle HTTP transport across
+connection, point-query, aggregate, result-materialization, and insert
+workloads.
+
+See [benchmarks/README.md](benchmarks/README.md) for the methodology, measured
+reference result, caveats, and the one-command runner.
+
 ## Development
 
 ```bash
@@ -579,7 +596,8 @@ documented compatibility or framework-boundary cases.
 
 Integration tests expect native ClickHouse instances on `127.0.0.1:9000` and
 `127.0.0.1:9001`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete
-workflow.
+workflow. Maintainers should use the gated process in
+[RELEASING.md](RELEASING.md) for tagged releases.
 
 ## License
 

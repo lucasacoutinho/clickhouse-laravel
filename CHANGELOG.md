@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [Unreleased]
+
+## [1.0.0] - 2026-07-26
 
 ### Added
 
@@ -32,6 +34,8 @@ All notable changes to this project will be documented in this file.
   alias, ephemeral, and low-cardinality modifiers.
 - PHPStan at level `max`, Psalm at error level 1, Pint, current PHPUnit
   support, and live ClickHouse 26.3/26.6 CI.
+- A reproducible native TCP/PDO versus default Guzzle HTTP performance
+  comparison with version-pinned fixtures and measured reference results.
 
 ### Changed
 
@@ -91,3 +95,6 @@ All notable changes to this project will be documented in this file.
 - Transactions throw by default instead of silently running without atomicity.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
+
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/lucasacoutinho/clickhouse-laravel/releases/tag/v1.0.0

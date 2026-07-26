@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version without the v prefix (for example, 1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.preflight.outputs.tag }}
+      tag_exists: ${{ steps.preflight.outputs.tag_exists }}
+      version: ${{ steps.preflight.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate version, branch, and changelog
+        id: preflight
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
+            echo "Releases must run from $DEFAULT_BRANCH, not $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be a stable semantic version such as 1.2.3." >&2
+            exit 1
+          fi
+
+          tag="v${RELEASE_VERSION}"
+
+          if ! grep -Fq "## [${RELEASE_VERSION}] - " CHANGELOG.md; then
+            echo "CHANGELOG.md has no dated ${RELEASE_VERSION} release section." >&2
+            exit 1
+          fi
+
+          tag_commit="$(git rev-list -n 1 "$tag" 2>/dev/null || true)"
+          tag_exists=false
+
+          if [[ -n "$tag_commit" ]]; then
+            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              echo "$tag already points to $tag_commit, not $GITHUB_SHA." >&2
+              exit 1
+            fi
+
+            tag_exists=true
+          fi
+
+          {
+            echo "tag=$tag"
+            echo "tag_exists=$tag_exists"
+            echo "version=$RELEASE_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+  tests:
+    name: Complete test matrix
+    needs: validate
+    uses: ./.github/workflows/tests.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish ${{ needs.validate.outputs.tag }}
+    needs: [validate, tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      COMPOSER_ROOT_VERSION: ${{ needs.validate.outputs.version }}
+      TAG_EXISTS: ${{ needs.validate.outputs.tag_exists }}
+      TAG_NAME: ${{ needs.validate.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP and Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          extensions: zip
+          coverage: none
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Build release archive
+        run: |
+          mkdir -p dist
+          composer archive \
+            --format=zip \
+            --dir=dist \
+            --file="clickhouse-laravel-${TAG_NAME}"
+          sha256sum "dist/clickhouse-laravel-${TAG_NAME}.zip" \
+            > "dist/clickhouse-laravel-${TAG_NAME}.zip.sha256"
+
+      - name: Create release tag
+        if: env.TAG_EXISTS != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$TAG_NAME" --message "Release $TAG_NAME"
+          git push origin "refs/tags/$TAG_NAME"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" dist/* \
+              --clobber \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG_NAME" dist/* \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG_NAME" \
+              --verify-tag
+          fi
+
+          {
+            echo "### Published $TAG_NAME"
+            echo
+            echo "- GitHub release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG_NAME"
+            echo "- Packagist: https://packagist.org/packages/lucasacoutinho/clickhouse-laravel"
+          } >> "$GITHUB_STEP_SUMMARY"

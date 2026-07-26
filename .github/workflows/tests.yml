@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -76,8 +77,7 @@ jobs:
       - name: Select framework versions
         run: >-
           composer require
-          "illuminate/database:${{ matrix.laravel }}"
-          "illuminate/support:${{ matrix.laravel }}"
+          "laravel/framework:${{ matrix.laravel }}"
           "orchestra/testbench:${{ matrix.testbench }}"
           --no-update
           --no-interaction
@@ -192,6 +192,7 @@ jobs:
 
       - name: Verify extension releases
         run: |
+          # shellcheck disable=SC2016
           php -r '
           foreach (["clickhouse", "pdo_clickhouse"] as $extension) {
               $version = phpversion($extension);
@@ -207,8 +208,7 @@ jobs:
       - name: Select Laravel 13
         run: >-
           composer require
-          "illuminate/database:13.*"
-          "illuminate/support:13.*"
+          "laravel/framework:13.*"
           "orchestra/testbench:11.*"
           --no-update
           --no-interaction

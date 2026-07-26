@@ -1,0 +1,27 @@
+{
+    "name": "lucasacoutinho/clickhouse-laravel-native-benchmark",
+    "description": "Isolated benchmark fixture for lucasacoutinho/clickhouse-laravel",
+    "type": "project",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "/package",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "lucasacoutinho/clickhouse-laravel": "dev-main"
+                }
+            }
+        }
+    ],
+    "require": {
+        "php": "^8.5",
+        "laravel/framework": "13.22.0",
+        "lucasacoutinho/clickhouse-laravel": "dev-main"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
