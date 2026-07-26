@@ -340,8 +340,11 @@ class ClickHouseConnection extends Connection
 
     private function isNativeConnectionException(Throwable $exception): bool
     {
-        /** @var class-string $connectionException */
         $connectionException = 'ClickHouse\\Driver\\Exception\\ConnectionException';
+
+        if (! class_exists($connectionException)) {
+            return false;
+        }
 
         return is_a($exception, $connectionException);
     }
