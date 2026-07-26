@@ -3,25 +3,62 @@
 namespace ClickHouse\Laravel;
 
 use ClickHouse\Laravel\Connectors\ClickHouseConnector;
+use InvalidArgumentException;
 use PDO;
+use RuntimeException;
+use Throwable;
 
 /**
  * Manages a cluster of ClickHouse nodes.
  *
- * Reads: failover — try nodes sequentially until one connects.
- * Writes: distributed — execute on ALL nodes in the cluster.
+ * Connections fail over sequentially. Replication and distributed writes are
+ * intentionally delegated to ClickHouse engines and Distributed tables.
+ *
+ * @api
  */
 class ClickHouseCluster
 {
+    /** @var list<array<string, mixed>> */
     protected array $nodes;
+
     protected int $activeIndex = 0;
+
+    /** @var array<int, PDO> */
     protected array $connections = [];
+
+    /** @var array<string, mixed> */
     protected array $baseConfig;
+
     protected ClickHouseConnector $connector;
 
-    public function __construct(array $nodes, array $baseConfig, ClickHouseConnector $connector)
-    {
-        $this->nodes = array_values($nodes);
+    /**
+     * @param  array<array-key, mixed>  $nodes
+     * @param  array<string, mixed>  $baseConfig
+     */
+    public function __construct(
+        array $nodes,
+        array $baseConfig,
+        ClickHouseConnector $connector,
+    ) {
+        if ($nodes === []) {
+            throw new InvalidArgumentException('ClickHouse cluster must contain at least one node.');
+        }
+
+        $validatedNodes = [];
+
+        foreach ($nodes as $node) {
+            if (! is_array($node) || blank($node['host'] ?? null)) {
+                throw new InvalidArgumentException(
+                    'Each ClickHouse cluster node must define a non-empty host.'
+                );
+            }
+
+            /** @var array<string, mixed> $node */
+            $validatedNodes[] = $node;
+        }
+
+        $this->nodes = $validatedNodes;
+        unset($baseConfig['cluster']);
         $this->baseConfig = $baseConfig;
         $this->connector = $connector;
     }
@@ -33,22 +70,37 @@ class ClickHouseCluster
     {
         $tried = 0;
         $total = count($this->nodes);
+        $previous = null;
 
         while ($tried < $total) {
             try {
                 return $this->getConnectionForNode($this->activeIndex);
-            } catch (\Throwable) {
+            } catch (InvalidArgumentException $exception) {
+                throw $exception;
+            } catch (Throwable $exception) {
+                $previous = $exception;
                 unset($this->connections[$this->activeIndex]);
                 $this->slideNode();
                 $tried++;
             }
         }
 
-        throw new \RuntimeException('All ClickHouse cluster nodes are unreachable.');
+        throw new RuntimeException('All ClickHouse cluster nodes are unreachable.', 0, $previous);
     }
 
     /**
-     * Get PDO connections for ALL nodes (for distributed writes).
+     * Get the active connection for both reads and writes.
+     *
+     * Writes are not automatically replayed or fanned out. Use ReplicatedMergeTree
+     * or Distributed tables so ClickHouse owns replication and failure semantics.
+     */
+    public function getWriteConnection(): PDO
+    {
+        return $this->getReadConnection();
+    }
+
+    /**
+     * Return connections for every node for explicit administrative use only.
      *
      * @return PDO[]
      */
@@ -56,7 +108,7 @@ class ClickHouseCluster
     {
         $connections = [];
 
-        foreach ($this->nodes as $index => $node) {
+        foreach (array_keys($this->nodes) as $index) {
             $connections[] = $this->getConnectionForNode($index);
         }
 
@@ -72,6 +124,24 @@ class ClickHouseCluster
     }
 
     /**
+     * Forget a failed active connection and move subsequent work to the next node.
+     */
+    public function invalidateActiveConnection(bool $rotate = true): void
+    {
+        unset($this->connections[$this->activeIndex]);
+
+        if ($rotate) {
+            $this->slideNode();
+        }
+    }
+
+    public function disconnect(): void
+    {
+        $this->connections = [];
+        $this->activeIndex = 0;
+    }
+
+    /**
      * Get or create a PDO connection for a specific node.
      */
     protected function getConnectionForNode(int $index): PDO
@@ -80,7 +150,11 @@ class ClickHouseCluster
             return $this->connections[$index];
         }
 
-        $nodeConfig = array_merge($this->baseConfig, $this->nodes[$index]);
+        $node = $this->nodes[$index] ?? throw new InvalidArgumentException(
+            "Unknown ClickHouse cluster node index: {$index}."
+        );
+        $nodeConfig = array_merge($this->baseConfig, $node);
+        unset($nodeConfig['cluster']);
         $this->connections[$index] = $this->connector->connect($nodeConfig);
 
         return $this->connections[$index];
@@ -91,6 +165,7 @@ class ClickHouseCluster
         return $this->activeIndex;
     }
 
+    /** @return list<array<string, mixed>> */
     public function getNodes(): array
     {
         return $this->nodes;

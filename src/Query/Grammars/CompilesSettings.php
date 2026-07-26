@@ -2,10 +2,12 @@
 
 namespace ClickHouse\Laravel\Query\Grammars;
 
+use ClickHouse\Laravel\Support\ClickHouseSql;
 use Illuminate\Database\Query\Builder;
 
 trait CompilesSettings
 {
+    /** @param array<string, bool|float|int|string|null> $settings */
     protected function compileSettings(Builder $query, array $settings): string
     {
         if (empty($settings)) {
@@ -14,14 +16,10 @@ trait CompilesSettings
 
         $parts = [];
         foreach ($settings as $key => $value) {
-            $formatted = match (true) {
-                is_bool($value) => $value ? '1' : '0',
-                is_string($value) => "'" . addslashes($value) . "'",
-                default => $value,
-            };
-            $parts[] = "{$key} = {$formatted}";
+            $name = ClickHouseSql::settingName($key);
+            $parts[] = $name.' = '.ClickHouseSql::literal($value, "setting {$name}");
         }
 
-        return 'SETTINGS ' . implode(', ', $parts);
+        return 'SETTINGS '.implode(', ', $parts);
     }
 }

@@ -5,6 +5,7 @@ namespace ClickHouse\Laravel\Tests\Unit\Schema;
 use ClickHouse\Laravel\Schema\ClickHouseBlueprint;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaGrammar;
 use ClickHouse\Laravel\Tests\TestCase;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Fluent;
 
 class ClickHouseSchemaGrammarTest extends TestCase
@@ -27,8 +28,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         return $this->grammar()->compileCreate($blueprint, new Fluent(['name' => 'create']));
     }
 
-
-    public function testCreateMergeTree(): void
+    public function test_create_merge_tree(): void
     {
         $bp = $this->blueprint();
         $bp->uint64('id');
@@ -45,7 +45,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('ORDER BY (`id`)', $sql);
     }
 
-    public function testCreateDefaultEngine(): void
+    public function test_create_default_engine(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -56,7 +56,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('ORDER BY tuple()', $sql);
     }
 
-    public function testCreateReplacingMergeTree(): void
+    public function test_create_replacing_merge_tree(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -66,7 +66,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('ENGINE = ReplacingMergeTree(updated_at)', $sql);
     }
 
-    public function testCreateWithPartitionBy(): void
+    public function test_create_with_partition_by(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -78,7 +78,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('PARTITION BY toYYYYMM(created_at)', $sql);
     }
 
-    public function testCreateWithPrimaryKey(): void
+    public function test_create_with_primary_key(): void
     {
         $bp = $this->blueprint();
         $bp->string('tenant_id');
@@ -91,7 +91,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('PRIMARY KEY (`tenant_id`)', $sql);
     }
 
-    public function testCreateWithSettings(): void
+    public function test_create_with_settings(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -103,7 +103,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('SETTINGS index_granularity = 8192', $sql);
     }
 
-    public function testCreateMemoryEngineNoOrderBy(): void
+    public function test_create_memory_engine_no_order_by(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -114,7 +114,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringNotContainsString('ORDER BY', $sql);
     }
 
-    public function testCreateFullTable(): void
+    public function test_create_full_table(): void
     {
         $bp = $this->blueprint();
         $bp->uint64('id');
@@ -135,36 +135,36 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('SETTINGS index_granularity = 4096', $sql);
     }
 
-
-    public function testCompileDrop(): void
+    public function test_compile_drop(): void
     {
         $bp = $this->blueprint();
-        $sql = $this->grammar()->compileDrop($bp, new Fluent());
+        $sql = $this->grammar()->compileDrop($bp, new Fluent);
         $this->assertSame('DROP TABLE `events`', $sql);
     }
 
-    public function testCompileDropIfExists(): void
+    public function test_compile_drop_if_exists(): void
     {
         $bp = $this->blueprint();
-        $sql = $this->grammar()->compileDropIfExists($bp, new Fluent());
+        $sql = $this->grammar()->compileDropIfExists($bp, new Fluent);
         $this->assertSame('DROP TABLE IF EXISTS `events`', $sql);
     }
 
-
-    public function testCompileAdd(): void
+    public function test_compile_add(): void
     {
         $bp = $this->blueprint();
-        $bp->string('email');
+        $email = $bp->string('email');
         $bp->integer('age');
 
-        $sql = $this->grammar()->compileAdd($bp, new Fluent());
+        $sql = $this->grammar()->compileAdd(
+            $bp,
+            new Fluent(['column' => $email]),
+        );
 
-        $this->assertStringContainsString('ALTER TABLE `events` ADD COLUMN `email` String', $sql);
-        $this->assertStringContainsString('ALTER TABLE `events` ADD COLUMN `age` Int32', $sql);
+        $this->assertSame('ALTER TABLE `events` ADD COLUMN `email` String', $sql);
+        $this->assertStringNotContainsString('age', $sql);
     }
 
-
-    public function testCompileDropColumn(): void
+    public function test_compile_drop_column(): void
     {
         $bp = $this->blueprint();
         $command = new Fluent(['columns' => ['email', 'age']]);
@@ -175,8 +175,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DROP COLUMN `age`', $sql);
     }
 
-
-    public function testCompileRename(): void
+    public function test_compile_rename(): void
     {
         $bp = $this->blueprint('old_table');
         $command = new Fluent(['to' => 'new_table']);
@@ -185,8 +184,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertSame('RENAME TABLE `old_table` TO `new_table`', $sql);
     }
 
-
-    public function testTypeString(): void
+    public function test_type_string(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -194,7 +192,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`name` String', $sql);
     }
 
-    public function testTypeInteger(): void
+    public function test_type_integer(): void
     {
         $bp = $this->blueprint();
         $bp->integer('count');
@@ -202,7 +200,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`count` Int32', $sql);
     }
 
-    public function testTypeBigInteger(): void
+    public function test_type_big_integer(): void
     {
         $bp = $this->blueprint();
         $bp->bigInteger('big');
@@ -210,7 +208,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`big` Int64', $sql);
     }
 
-    public function testTypeSmallInteger(): void
+    public function test_type_small_integer(): void
     {
         $bp = $this->blueprint();
         $bp->smallInteger('small');
@@ -218,7 +216,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`small` Int16', $sql);
     }
 
-    public function testTypeTinyInteger(): void
+    public function test_type_tiny_integer(): void
     {
         $bp = $this->blueprint();
         $bp->tinyInteger('tiny');
@@ -226,7 +224,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`tiny` Int8', $sql);
     }
 
-    public function testTypeMediumInteger(): void
+    public function test_type_medium_integer(): void
     {
         $bp = $this->blueprint();
         $bp->mediumInteger('med');
@@ -234,7 +232,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`med` Int32', $sql);
     }
 
-    public function testTypeFloat(): void
+    public function test_type_float(): void
     {
         $bp = $this->blueprint();
         $bp->float('val');
@@ -242,7 +240,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`val` Float32', $sql);
     }
 
-    public function testTypeDouble(): void
+    public function test_type_double(): void
     {
         $bp = $this->blueprint();
         $bp->double('val');
@@ -250,7 +248,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`val` Float64', $sql);
     }
 
-    public function testTypeDecimalDefaults(): void
+    public function test_type_decimal_defaults(): void
     {
         $bp = $this->blueprint();
         $bp->decimal('amount');
@@ -258,7 +256,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('Decimal(', $sql);
     }
 
-    public function testTypeDecimalCustom(): void
+    public function test_type_decimal_custom(): void
     {
         $bp = $this->blueprint();
         $bp->decimal('amount', 18, 4);
@@ -266,15 +264,15 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('Decimal(18, 4)', $sql);
     }
 
-    public function testTypeBoolean(): void
+    public function test_type_boolean(): void
     {
         $bp = $this->blueprint();
         $bp->boolean('active');
         $sql = $this->compileCreate($bp);
-        $this->assertStringContainsString('`active` UInt8', $sql);
+        $this->assertStringContainsString('`active` Bool', $sql);
     }
 
-    public function testTypeDate(): void
+    public function test_type_date(): void
     {
         $bp = $this->blueprint();
         $bp->date('day');
@@ -282,7 +280,15 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`day` Date', $sql);
     }
 
-    public function testTypeDateTime(): void
+    public function test_type_date32(): void
+    {
+        $bp = $this->blueprint();
+        $bp->date32('day');
+
+        $this->assertStringContainsString('`day` Date32', $this->compileCreate($bp));
+    }
+
+    public function test_type_date_time(): void
     {
         $bp = $this->blueprint();
         $bp->dateTime('ts');
@@ -290,7 +296,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`ts` DateTime', $sql);
     }
 
-    public function testTypeDateTimeWithPrecision(): void
+    public function test_type_date_time_with_precision(): void
     {
         $bp = $this->blueprint();
         $bp->dateTime('ts', 3);
@@ -298,7 +304,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DateTime64(3)', $sql);
     }
 
-    public function testTypeDateTimeTz(): void
+    public function test_type_date_time_tz(): void
     {
         $bp = $this->blueprint();
         $bp->dateTimeTz('ts');
@@ -306,7 +312,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString("DateTime('UTC')", $sql);
     }
 
-    public function testTypeTimestamp(): void
+    public function test_type_timestamp(): void
     {
         $bp = $this->blueprint();
         $bp->timestamp('ts');
@@ -314,7 +320,23 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DateTime', $sql);
     }
 
-    public function testTypeText(): void
+    public function test_type_time(): void
+    {
+        $bp = $this->blueprint();
+        $bp->time('time');
+
+        $this->assertStringContainsString('`time` Time', $this->compileCreate($bp));
+    }
+
+    public function test_type_time64(): void
+    {
+        $bp = $this->blueprint();
+        $bp->time64('time', 6);
+
+        $this->assertStringContainsString('`time` Time64(6)', $this->compileCreate($bp));
+    }
+
+    public function test_type_text(): void
     {
         $bp = $this->blueprint();
         $bp->text('body');
@@ -322,7 +344,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`body` String', $sql);
     }
 
-    public function testTypeMediumText(): void
+    public function test_type_medium_text(): void
     {
         $bp = $this->blueprint();
         $bp->mediumText('body');
@@ -330,7 +352,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`body` String', $sql);
     }
 
-    public function testTypeLongText(): void
+    public function test_type_long_text(): void
     {
         $bp = $this->blueprint();
         $bp->longText('body');
@@ -338,7 +360,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`body` String', $sql);
     }
 
-    public function testTypeJson(): void
+    public function test_type_json(): void
     {
         $bp = $this->blueprint();
         $bp->json('data');
@@ -346,7 +368,15 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`data` String', $sql);
     }
 
-    public function testTypeBinary(): void
+    public function test_type_native_json(): void
+    {
+        $bp = $this->blueprint();
+        $bp->nativeJson('data');
+
+        $this->assertStringContainsString('`data` JSON', $this->compileCreate($bp));
+    }
+
+    public function test_type_binary(): void
     {
         $bp = $this->blueprint();
         $bp->binary('blob');
@@ -354,7 +384,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`blob` String', $sql);
     }
 
-    public function testTypeUuid(): void
+    public function test_type_uuid(): void
     {
         $bp = $this->blueprint();
         $bp->uuid('uid');
@@ -362,7 +392,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`uid` UUID', $sql);
     }
 
-    public function testTypeIpAddress(): void
+    public function test_type_ip_address(): void
     {
         $bp = $this->blueprint();
         $bp->ipAddress('ip');
@@ -370,7 +400,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`ip` IPv4', $sql);
     }
 
-    public function testTypeChar(): void
+    public function test_type_char(): void
     {
         $bp = $this->blueprint();
         $bp->char('code', 2);
@@ -378,7 +408,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('FixedString(2)', $sql);
     }
 
-    public function testTypeEnum(): void
+    public function test_type_enum(): void
     {
         $bp = $this->blueprint();
         $bp->enum('status', ['active', 'inactive']);
@@ -386,7 +416,25 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString("Enum8('active' = 1, 'inactive' = 2)", $sql);
     }
 
-    public function testTypeUnsignedTinyInteger(): void
+    public function test_empty_enum_is_rejected(): void
+    {
+        $bp = $this->blueprint();
+        $bp->enum('status', []);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->compileCreate($bp);
+    }
+
+    public function test_duplicate_enum_values_are_rejected(): void
+    {
+        $bp = $this->blueprint();
+        $bp->enum('status', ['active', 'active']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->compileCreate($bp);
+    }
+
+    public function test_type_unsigned_tiny_integer(): void
     {
         $bp = $this->blueprint();
         $bp->unsignedTinyInteger('val');
@@ -394,7 +442,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`val` UInt8', $sql);
     }
 
-    public function testTypeUnsignedSmallInteger(): void
+    public function test_type_unsigned_small_integer(): void
     {
         $bp = $this->blueprint();
         $bp->unsignedSmallInteger('val');
@@ -402,7 +450,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`val` UInt16', $sql);
     }
 
-    public function testTypeUnsignedInteger(): void
+    public function test_type_unsigned_integer(): void
     {
         $bp = $this->blueprint();
         $bp->unsignedInteger('val');
@@ -410,7 +458,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`val` UInt32', $sql);
     }
 
-    public function testTypeUnsignedBigInteger(): void
+    public function test_type_unsigned_big_integer(): void
     {
         $bp = $this->blueprint();
         $bp->unsignedBigInteger('val');
@@ -418,7 +466,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`val` UInt64', $sql);
     }
 
-    public function testTypeClickhouseRaw(): void
+    public function test_type_clickhouse_raw(): void
     {
         $bp = $this->blueprint();
         $bp->clickhouseType('tags', 'Array(String)');
@@ -426,8 +474,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`tags` Array(String)', $sql);
     }
 
-
-    public function testNullableWrapsType(): void
+    public function test_nullable_wraps_type(): void
     {
         $bp = $this->blueprint();
         $bp->string('name')->nullable();
@@ -435,7 +482,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`name` Nullable(String)', $sql);
     }
 
-    public function testNullableUuid(): void
+    public function test_nullable_uuid(): void
     {
         $bp = $this->blueprint();
         $bp->uuid('uid')->nullable();
@@ -443,8 +490,36 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('Nullable(UUID)', $sql);
     }
 
+    public function test_low_cardinality_modifier_wraps_the_native_type(): void
+    {
+        $bp = $this->blueprint();
+        $bp->string('country')->lowCardinality();
 
-    public function testDefaultStringValue(): void
+        $this->assertStringContainsString(
+            '`country` LowCardinality(String)',
+            $this->compileCreate($bp),
+        );
+    }
+
+    public function test_nullable_low_cardinality_uses_valid_wrapper_order(): void
+    {
+        $bp = $this->blueprint();
+        $bp->string('country')->nullable()->lowCardinality();
+        $bp->lowCardinality('status')->nullable();
+
+        $sql = $this->compileCreate($bp);
+
+        $this->assertStringContainsString(
+            '`country` LowCardinality(Nullable(String))',
+            $sql,
+        );
+        $this->assertStringContainsString(
+            '`status` LowCardinality(Nullable(String))',
+            $sql,
+        );
+    }
+
+    public function test_default_string_value(): void
     {
         $bp = $this->blueprint();
         $bp->string('status')->default('active');
@@ -452,7 +527,23 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString("DEFAULT 'active'", $sql);
     }
 
-    public function testDefaultIntegerValue(): void
+    public function test_default_string_escapes_click_house_quotes_and_backslashes(): void
+    {
+        $bp = $this->blueprint();
+        $bp->string('path')->default("Lucas' C:\\data");
+
+        $this->assertStringContainsString("DEFAULT 'Lucas\\' C:\\\\data'", $this->compileCreate($bp));
+    }
+
+    public function test_default_expression_remains_raw_when_explicit(): void
+    {
+        $bp = $this->blueprint();
+        $bp->dateTime('created_at')->default(new Expression('now()'));
+
+        $this->assertStringContainsString('DEFAULT now()', $this->compileCreate($bp));
+    }
+
+    public function test_default_integer_value(): void
     {
         $bp = $this->blueprint();
         $bp->integer('count')->default(0);
@@ -460,7 +551,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DEFAULT 0', $sql);
     }
 
-    public function testDefaultBooleanTrue(): void
+    public function test_default_boolean_true(): void
     {
         $bp = $this->blueprint();
         $bp->boolean('active')->default(true);
@@ -468,7 +559,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DEFAULT 1', $sql);
     }
 
-    public function testDefaultBooleanFalse(): void
+    public function test_default_boolean_false(): void
     {
         $bp = $this->blueprint();
         $bp->boolean('active')->default(false);
@@ -476,8 +567,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('DEFAULT 0', $sql);
     }
 
-
-    public function testWrapValueBackticks(): void
+    public function test_wrap_value_backticks(): void
     {
         $bp = $this->blueprint();
         $bp->string('user_name');
@@ -485,7 +575,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`user_name`', $sql);
     }
 
-    public function testCreateOnCluster(): void
+    public function test_create_on_cluster(): void
     {
         $bp = $this->blueprint();
         $bp->uint64('id');
@@ -495,11 +585,11 @@ class ClickHouseSchemaGrammarTest extends TestCase
 
         $sql = $this->compileCreate($bp);
 
-        $this->assertStringContainsString('ON CLUSTER my_cluster', $sql);
+        $this->assertStringContainsString('ON CLUSTER `my_cluster`', $sql);
         $this->assertLessThan(strpos($sql, '('), strpos($sql, 'ON CLUSTER'));
     }
 
-    public function testCreateWithoutOnCluster(): void
+    public function test_create_without_on_cluster(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -507,7 +597,99 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringNotContainsString('ON CLUSTER', $sql);
     }
 
-    public function testColumnCompressionCodec(): void
+    public function test_create_with_sample_ttl_settings_and_comment(): void
+    {
+        $bp = $this->blueprint();
+        $bp->uint64('id');
+        $bp->dateTime('created_at');
+        $bp->engine('MergeTree()');
+        $bp->orderBy('id');
+        $bp->sampleBy('intHash32(id)');
+        $bp->ttl('created_at + INTERVAL 30 DAY');
+        $bp->setting('storage_policy', "hot'cold");
+        $bp->tableComment("Lucas' events");
+
+        $sql = $this->compileCreate($bp);
+
+        $this->assertStringContainsString('SAMPLE BY intHash32(id)', $sql);
+        $this->assertStringContainsString('TTL created_at + INTERVAL 30 DAY', $sql);
+        $this->assertStringContainsString("SETTINGS storage_policy = 'hot\\'cold'", $sql);
+        $this->assertStringContainsString("COMMENT 'Lucas\\' events'", $sql);
+    }
+
+    public function test_column_materialized_alias_ttl_and_comment_modifiers(): void
+    {
+        $bp = $this->blueprint();
+        $bp->string('normalized')
+            ->materialized(new Expression('lower(source)'))
+            ->codec('ZSTD')
+            ->ttl(new Expression('created_at + INTERVAL 7 DAY'))
+            ->comment("Normalized user's source");
+
+        $sql = $this->compileCreate($bp);
+
+        $this->assertStringContainsString('MATERIALIZED lower(source)', $sql);
+        $this->assertStringContainsString('CODEC(ZSTD)', $sql);
+        $this->assertStringContainsString('TTL created_at + INTERVAL 7 DAY', $sql);
+        $this->assertStringContainsString("COMMENT 'Normalized user\\'s source'", $sql);
+    }
+
+    public function test_column_ephemeral_without_expression(): void
+    {
+        $bp = $this->blueprint();
+        $bp->string('scratch')->ephemeral();
+
+        $this->assertStringContainsString(
+            '`scratch` String EPHEMERAL',
+            $this->compileCreate($bp),
+        );
+    }
+
+    public function test_compile_change_column(): void
+    {
+        $bp = $this->blueprint();
+        $column = $bp->lowCardinalityString('status')->change();
+        $command = new Fluent(['column' => $column]);
+
+        $sql = $this->grammar()->compileChange($bp, $command);
+
+        $this->assertSame(
+            'ALTER TABLE `events` MODIFY COLUMN `status` LowCardinality(String)',
+            $sql,
+        );
+    }
+
+    public function test_compile_rename_column(): void
+    {
+        $blueprint = $this->blueprint();
+        $sql = $this->grammar()->compileRenameColumn(
+            $blueprint,
+            new Fluent(['from' => 'old_name', 'to' => 'new_name']),
+        );
+
+        $this->assertSame(
+            'ALTER TABLE `events` RENAME COLUMN `old_name` TO `new_name`',
+            $sql,
+        );
+    }
+
+    public function test_compile_skip_index_and_projection(): void
+    {
+        $bp = $this->blueprint();
+        $index = $bp->skipIndex('idx_status', 'status', 'set(100)', 2);
+        $projection = $bp->projection('by_user', 'SELECT user_id, count() GROUP BY user_id');
+
+        $this->assertSame(
+            'ALTER TABLE `events` ADD INDEX `idx_status` status TYPE set(100) GRANULARITY 2',
+            $this->grammar()->compileAddSkipIndex($bp, $index),
+        );
+        $this->assertSame(
+            'ALTER TABLE `events` ADD PROJECTION `by_user` (SELECT user_id, count() GROUP BY user_id)',
+            $this->grammar()->compileAddProjection($bp, $projection),
+        );
+    }
+
+    public function test_column_compression_codec(): void
     {
         $bp = $this->blueprint();
         $bp->uint64('id')->codec('ZSTD(3)');
@@ -515,7 +697,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('CODEC(ZSTD(3))', $sql);
     }
 
-    public function testColumnCompressionCodecDelta(): void
+    public function test_column_compression_codec_delta(): void
     {
         $bp = $this->blueprint();
         $bp->float64('value')->codec('Delta, ZSTD');
@@ -523,7 +705,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('CODEC(Delta, ZSTD)', $sql);
     }
 
-    public function testColumnCompressionCodecDoubleDelta(): void
+    public function test_column_compression_codec_double_delta(): void
     {
         $bp = $this->blueprint();
         $bp->dateTime('ts')->codec('DoubleDelta, LZ4');
@@ -531,7 +713,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('CODEC(DoubleDelta, LZ4)', $sql);
     }
 
-    public function testColumnWithoutCodec(): void
+    public function test_column_without_codec(): void
     {
         $bp = $this->blueprint();
         $bp->string('name');
@@ -539,7 +721,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringNotContainsString('CODEC', $sql);
     }
 
-    public function testFullDistributedTable(): void
+    public function test_full_distributed_table(): void
     {
         $bp = $this->blueprint('events');
         $bp->uint64('id')->codec('ZSTD(3)');
@@ -553,7 +735,7 @@ class ClickHouseSchemaGrammarTest extends TestCase
 
         $sql = $this->compileCreate($bp);
 
-        $this->assertStringContainsString('CREATE TABLE `events` ON CLUSTER production', $sql);
+        $this->assertStringContainsString('CREATE TABLE `events` ON CLUSTER `production`', $sql);
         $this->assertStringContainsString('CODEC(ZSTD(3))', $sql);
         $this->assertStringContainsString('CODEC(DoubleDelta, LZ4)', $sql);
         $this->assertStringContainsString('ENGINE = ReplicatedMergeTree()', $sql);

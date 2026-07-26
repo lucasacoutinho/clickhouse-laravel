@@ -2,7 +2,9 @@
 
 namespace ClickHouse\Laravel\Query\Concerns;
 
+use ClickHouse\Laravel\Support\ClickHouseSql;
 use Illuminate\Contracts\Database\Query\Expression;
+use Illuminate\Database\Query\Expression as QueryExpression;
 
 /**
  * WITH FILL — fill gaps in time series and ordered sequences.
@@ -14,21 +16,27 @@ use Illuminate\Contracts\Database\Query\Expression;
  */
 trait HasWithFill
 {
+    /**
+     * @var array<int, array{raw: string}|array{from?: string, to?: string, step?: string}>
+     */
     public array $withFills = [];
+
+    /** @var list<array{raw: string}|array{column: string}> */
     public array $interpolateColumns = [];
 
     /**
      * Attach WITH FILL to the most recent orderBy column.
-     * Accepts Expression objects or raw strings for each parameter.
+     * Accepts Expression objects or numeric literals for each parameter.
+     * Use DB::raw() when a ClickHouse expression is required.
      *
      * Usage:
      *   ->orderBy('bucket')
      *   ->withFill(from: DB::raw("toDateTime64('2026-01-01', 3)"), step: DB::raw("toIntervalMinute(5)"))
      */
     public function withFill(
-        Expression|string|null $from = null,
-        Expression|string|null $to = null,
-        Expression|string|null $step = null,
+        Expression|int|float|null $from = null,
+        Expression|int|float|null $to = null,
+        Expression|int|float|null $step = null,
     ): static {
         $lastIndex = count($this->orders ?? []) - 1;
 
@@ -36,14 +44,15 @@ trait HasWithFill
             return $this;
         }
 
-        $params = array_filter(
-            [
-                'from' => $from instanceof Expression ? $from->getValue($this->getGrammar()) : $from,
-                'to'   => $to instanceof Expression ? $to->getValue($this->getGrammar()) : $to,
-                'step' => $step instanceof Expression ? $step->getValue($this->getGrammar()) : $step,
-            ],
-            fn($v) => $v !== null,
-        );
+        /** @var array{from?: string, to?: string, step?: string} $params */
+        $params = [];
+
+        foreach (['from' => $from, 'to' => $to, 'step' => $step] as $name => $value) {
+            $compiled = $this->compileFillValue($value);
+            if ($compiled !== null) {
+                $params[$name] = $compiled;
+            }
+        }
 
         $this->withFills[$lastIndex] = $params;
 
@@ -65,7 +74,9 @@ trait HasWithFill
             return $this;
         }
 
-        $this->withFills[$lastIndex] = ['raw' => $expression];
+        $this->withFills[$lastIndex] = [
+            'raw' => ClickHouseSql::safeExpression($expression, 'WITH FILL expression'),
+        ];
 
         return $this;
     }
@@ -78,22 +89,47 @@ trait HasWithFill
      *   ->withFillTime('2026-01-01', '2026-01-02', '5 minute')
      *   ->withFillTime($start, $end, '100 millisecond', precision: 3)
      *
-     * @param string      $from      Start datetime string
-     * @param string      $to        End datetime string
-     * @param string      $step      Interval expression (e.g. '5 minute', '100 millisecond', '1 hour')
-     * @param int         $precision DateTime64 precision (0=seconds, 3=ms, 6=us, 9=ns)
+     * @param  string  $from  Start datetime string
+     * @param  string  $to  End datetime string
+     * @param  string  $step  Interval expression (e.g. '5 minute', '100 millisecond', '1 hour')
+     * @param  int  $precision  DateTime64 precision (0=seconds, 3=ms, 6=us, 9=ns)
+     *
+     * @psalm-suppress PossiblyUndefinedIntArrayOffset preg_match defines both capture groups.
      */
     public function withFillTime(string $from, string $to, string $step, int $precision = 0): static
     {
-        $parts = preg_split('/\s+/', trim($step), 2);
-        $amount = $parts[0];
-        $unit = ucfirst(strtolower($parts[1] ?? 'second'));
+        if ($precision < 0 || $precision > 9) {
+            throw new \InvalidArgumentException('ClickHouse DateTime64 precision must be between 0 and 9.');
+        }
 
-        $dtFunc = $precision > 0 ? "toDateTime64('{$from}', {$precision})" : "toDateTime('{$from}')";
-        $dtFuncTo = $precision > 0 ? "toDateTime64('{$to}', {$precision})" : "toDateTime('{$to}')";
+        if (! preg_match(
+            '/\A([1-9][0-9]*)\s+(nanosecond|microsecond|millisecond|second|minute|hour|day|week|month|quarter|year)s?\z/i',
+            trim($step),
+            $matches,
+        )) {
+            throw new \InvalidArgumentException(
+                'ClickHouse WITH FILL step must look like "5 minute" using a positive integer and supported unit.'
+            );
+        }
+
+        $amount = $matches[1];
+        $unit = ucfirst(strtolower($matches[2]));
+        $quotedFrom = ClickHouseSql::quoteString($from);
+        $quotedTo = ClickHouseSql::quoteString($to);
+
+        $dtFunc = $precision > 0
+            ? "toDateTime64({$quotedFrom}, {$precision})"
+            : "toDateTime({$quotedFrom})";
+        $dtFuncTo = $precision > 0
+            ? "toDateTime64({$quotedTo}, {$precision})"
+            : "toDateTime({$quotedTo})";
         $intervalFunc = "toInterval{$unit}({$amount})";
 
-        return $this->withFill(from: $dtFunc, to: $dtFuncTo, step: $intervalFunc);
+        return $this->withFill(
+            from: $this->trustedFillExpression($dtFunc),
+            to: $this->trustedFillExpression($dtFuncTo),
+            step: $this->trustedFillExpression($intervalFunc),
+        );
     }
 
     /**
@@ -101,18 +137,71 @@ trait HasWithFill
      *
      * Usage:
      *   ->interpolate('cumulative')                    // INTERPOLATE (cumulative)
-     *   ->interpolate('cumulative', 'value AS 0')      // INTERPOLATE (cumulative, value AS 0)
+     *   ->interpolate('cumulative', DB::raw('value AS 0'))
      */
-    public function interpolate(string|array ...$columns): static
+    /**
+     * @param  array<array-key, mixed>|Expression|string  ...$columns
+     *
+     * @psalm-suppress MixedAssignment Nested entries are validated in the loop.
+     */
+    public function interpolate(string|Expression|array ...$columns): static
     {
         foreach ($columns as $col) {
             if (is_array($col)) {
-                $this->interpolateColumns = array_merge($this->interpolateColumns, $col);
-            } else {
-                $this->interpolateColumns[] = $col;
+                foreach ($col as $nestedColumn) {
+                    if (! is_string($nestedColumn) && ! $nestedColumn instanceof Expression) {
+                        throw new \InvalidArgumentException(
+                            'ClickHouse INTERPOLATE columns must be strings or expressions.'
+                        );
+                    }
+
+                    $this->interpolate($nestedColumn);
+                }
+
+                continue;
             }
+
+            if ($col instanceof Expression) {
+                $raw = $col->getValue($this->getGrammar());
+                if (! is_string($raw)) {
+                    throw new \InvalidArgumentException(
+                        'ClickHouse INTERPOLATE expressions must compile to strings.'
+                    );
+                }
+
+                $this->interpolateColumns[] = [
+                    'raw' => $raw,
+                ];
+
+                continue;
+            }
+
+            ClickHouseSql::nonEmpty($col, 'INTERPOLATE column');
+            $this->interpolateColumns[] = ['column' => $col];
         }
 
         return $this;
+    }
+
+    private function compileFillValue(Expression|int|float|null $value): ?string
+    {
+        if ($value instanceof Expression) {
+            $expression = $value->getValue($this->getGrammar());
+
+            if (is_int($expression) || is_float($expression)) {
+                return ClickHouseSql::literal($expression, 'WITH FILL value');
+            }
+
+            return $expression;
+        }
+
+        return $value === null ? null : ClickHouseSql::literal($value, 'WITH FILL value');
+    }
+
+    /** @return QueryExpression<literal-string> */
+    private function trustedFillExpression(string $expression): QueryExpression
+    {
+        /** @var literal-string $expression */
+        return new QueryExpression($expression);
     }
 }

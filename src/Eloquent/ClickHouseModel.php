@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  * - No auto-incrementing IDs (ClickHouse has no sequences)
  * - No automatic timestamps (managed manually or via traits)
  * - String primary key (UUIDs are common in ClickHouse)
- * - Unguarded by default (ClickHouse is append-only, mass assignment risk is low)
+ * - Mass assignment remains guarded until a model defines $fillable or $guarded
  *
  * Usage:
  *   class Event extends ClickHouseModel
@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 abstract class ClickHouseModel extends Model
 {
+    protected static string $builder = Builder::class;
+
     protected $connection = 'clickhouse';
 
     public $incrementing = false;
@@ -30,6 +32,4 @@ abstract class ClickHouseModel extends Model
     protected $keyType = 'string';
 
     protected $primaryKey = 'id';
-
-    protected $guarded = [];
 }

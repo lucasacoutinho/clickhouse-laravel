@@ -12,6 +12,7 @@ trait HasFinal
     public function final(bool $enable = true): static
     {
         $this->useFinal = $enable;
+
         return $this;
     }
 }

@@ -2,20 +2,43 @@
 
 namespace ClickHouse\Laravel;
 
-use Closure;
 use ClickHouse\Laravel\Connectors\ClickHouseConnector;
+use ClickHouse\Laravel\Exceptions\TransactionsNotSupportedException;
 use ClickHouse\Laravel\Query\ClickHouseQueryBuilder;
 use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaBuilder;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaGrammar;
+use ClickHouse\Laravel\Support\ClickHouseSql;
+use Closure;
 use Illuminate\Database\Connection;
+use Illuminate\Database\LostConnectionException;
+use Illuminate\Database\QueryException;
+use PDO;
+use PDOException;
+use ReflectionClass;
+use Throwable;
+use WeakMap;
 
+/**
+ * @api
+ *
+ * @psalm-suppress PropertyNotSetInConstructor Laravel owns inherited lazy state.
+ */
 class ClickHouseConnection extends Connection
 {
     protected ?ClickHouseCluster $cluster = null;
-    protected bool $settingsApplied = false;
-    protected array $settingsAppliedPdos = [];
 
+    protected bool $settingsApplied = false;
+
+    /** @var WeakMap<PDO, bool>|null */
+    protected ?WeakMap $settingsAppliedPdos = null;
+
+    /**
+     * @param  (Closure(): PDO)|PDO  $pdo
+     * @param  string  $database
+     * @param  string  $tablePrefix
+     * @param  array<string, mixed>  $config
+     */
     public function __construct($pdo, $database = '', $tablePrefix = '', array $config = [])
     {
         parent::__construct($pdo, $database, $tablePrefix, $config);
@@ -24,9 +47,11 @@ class ClickHouseConnection extends Connection
             $this->cluster = new ClickHouseCluster(
                 $config['cluster'],
                 $config,
-                new ClickHouseConnector(),
+                new ClickHouseConnector,
             );
         }
+
+        $this->validateRuntimeOptions($config);
     }
 
     public function getDriverName(): string
@@ -42,39 +67,64 @@ class ClickHouseConnection extends Connection
             $this->getPostProcessor()
         );
 
-        if (data_get($this->getConfig('options'), 'final', false)) {
+        if (
+            data_get($this->getConfig('query'), 'final', false)
+            || data_get($this->getConfig('options'), 'final', false)
+        ) {
             $builder->final();
         }
 
         return $builder;
     }
 
-    public function table($table, $as = null): ClickHouseQueryBuilder
+    public function table($table, $as = null, bool $final = false): ClickHouseQueryBuilder
     {
-        return $this->query()->from($table, $as);
+        $query = $this->query()->from($table, $as);
+
+        return $final ? $query->final() : $query;
     }
 
     /**
      * Apply ClickHouse server settings via SET statements.
      * Settings come from config and are not user-supplied input.
+     *
+     * @psalm-suppress MixedAssignment Values are validated by ClickHouseSql::literal.
      */
-    protected function applyServerSettings(\PDO $pdo): void
+    protected function applyServerSettings(PDO $pdo): void
     {
-        foreach ($this->getConfig('settings') ?? [] as $key => $value) {
-            $pdo->prepare("SET {$key} = ?")->execute([$value]);
+        $settings = $this->getConfig('settings') ?? [];
+
+        if (! is_array($settings)) {
+            throw new \InvalidArgumentException('ClickHouse settings must be an array.');
+        }
+
+        foreach ($settings as $key => $value) {
+            if (! is_string($key)) {
+                throw new \InvalidArgumentException('ClickHouse server setting names must be strings.');
+            }
+
+            $name = ClickHouseSql::settingName($key);
+            ClickHouseSql::literal($value, "setting {$name}");
+            $pdo->prepare("SET {$name} = ?")->execute([$value]);
         }
     }
 
     /**
      * Apply server settings once per PDO instance (used in cluster mode).
      */
-    protected function applyServerSettingsOnce(\PDO $pdo): void
+    protected function applyServerSettingsOnce(PDO $pdo): void
     {
-        $oid = spl_object_id($pdo);
+        $settingsAppliedPdos = $this->settingsAppliedPdos;
 
-        if (!isset($this->settingsAppliedPdos[$oid])) {
+        if ($settingsAppliedPdos === null) {
+            /** @var WeakMap<PDO, bool> $settingsAppliedPdos */
+            $settingsAppliedPdos = new WeakMap;
+            $this->settingsAppliedPdos = $settingsAppliedPdos;
+        }
+
+        if (! isset($settingsAppliedPdos[$pdo])) {
             $this->applyServerSettings($pdo);
-            $this->settingsAppliedPdos[$oid] = true;
+            $settingsAppliedPdos[$pdo] = true;
         }
     }
 
@@ -87,81 +137,18 @@ class ClickHouseConnection extends Connection
         if ($this->cluster) {
             $pdo = $this->cluster->getReadConnection();
             $this->applyServerSettingsOnce($pdo);
+
             return $pdo;
         }
 
         $pdo = parent::getPdo();
 
-        if (!$this->settingsApplied) {
+        if (! $this->settingsApplied) {
             $this->applyServerSettings($pdo);
             $this->settingsApplied = true;
         }
 
         return $pdo;
-    }
-
-    /**
-     * Execute a statement, distributing to all cluster nodes for writes.
-     */
-    public function statement($query, $bindings = []): bool
-    {
-        if ($this->cluster) {
-            return $this->executeOnCluster($query, $bindings);
-        }
-
-        return parent::statement($query, $bindings);
-    }
-
-    /**
-     * Execute an affecting statement, distributing to all cluster nodes.
-     */
-    public function affectingStatement($query, $bindings = []): int
-    {
-        if ($this->cluster) {
-            $this->executeOnCluster($query, $bindings);
-            return 0; // ClickHouse doesn't reliably return affected row counts
-        }
-
-        return parent::affectingStatement($query, $bindings);
-    }
-
-    /**
-     * Execute a write query on all cluster nodes.
-     *
-     * Note: if a node fails mid-loop, earlier nodes will have already committed.
-     * ClickHouse does not support distributed transactions — partial writes are possible.
-     */
-    protected function executeOnCluster(string $query, array $bindings): bool
-    {
-        foreach ($this->cluster->getWriteConnections() as $pdo) {
-            $this->applyServerSettingsOnce($pdo);
-            $statement = $pdo->prepare($query);
-            $statement->execute($this->prepareBindings($bindings));
-        }
-
-        return true;
-    }
-
-    /**
-     * Retry-aware query execution.
-     */
-    protected function run($query, $bindings, Closure $callback)
-    {
-        $retries = (int) ($this->getConfig('retries') ?? 0);
-        $attempts = 0;
-
-        while (true) {
-            try {
-                return parent::run($query, $bindings, $callback);
-            } catch (\Throwable $e) {
-                if (++$attempts > $retries) {
-                    throw $e;
-                }
-
-                $this->settingsApplied = false;
-                $this->reconnect();
-            }
-        }
     }
 
     protected function getDefaultQueryGrammar(): ClickHouseQueryGrammar
@@ -175,26 +162,33 @@ class ClickHouseConnection extends Connection
     }
 
     /**
-     * Create a grammar instance, handling Laravel 10-12 vs 13 constructor differences.
+     * Create a grammar instance, handling Laravel 12 vs 13 constructor differences.
+     */
+    /**
+     * @template TGrammar of object
+     *
+     * @param  class-string<TGrammar>  $class
+     * @return TGrammar
      */
     private function createGrammar(string $class): object
     {
-        try {
-            $grammar = new $class($this);
-        } catch (\TypeError) {
-            $grammar = new $class();
+        $constructor = (new ReflectionClass($class))->getConstructor();
+        /** @psalm-suppress MixedMethodCall The class-string template is reflection-validated. */
+        $grammar = $constructor !== null && $constructor->getNumberOfParameters() > 0
+            ? new $class($this)
+            : new $class;
+
+        if (method_exists($this, 'withTablePrefix')) {
+            /** @var TGrammar $grammar */
+            $grammar = $this->withTablePrefix($grammar);
         }
 
-        return method_exists($this, 'withTablePrefix')
-            ? $this->withTablePrefix($grammar)
-            : $grammar;
+        return $grammar;
     }
 
     public function getSchemaBuilder(): ClickHouseSchemaBuilder
     {
-        if (is_null($this->schemaGrammar)) {
-            $this->useDefaultSchemaGrammar();
-        }
+        parent::getSchemaBuilder();
 
         return new ClickHouseSchemaBuilder($this);
     }
@@ -205,32 +199,276 @@ class ClickHouseConnection extends Connection
     }
 
     /**
-     * ClickHouse has no transactions.
-     * We run the callback directly — this makes DB::transaction() safe to use
-     * in code shared between MySQL and ClickHouse connections.
+     * ClickHouse has no transactions. Passthrough mode is available only as an
+     * explicit compatibility escape hatch for shared application code.
      */
     public function transaction(Closure $callback, $attempts = 1): mixed
     {
+        $this->ensureTransactionPassthrough();
+
         return $callback($this);
     }
 
     public function beginTransaction(): void
     {
-        // no-op
+        $this->ensureTransactionPassthrough();
     }
 
     public function commit(): void
     {
-        // no-op
+        $this->ensureTransactionPassthrough();
     }
 
     public function rollBack($toLevel = null): void
     {
-        // no-op — don't throw, packages like Horizon wrap in transactions
+        $this->ensureTransactionPassthrough();
     }
 
     public function transactionLevel(): int
     {
         return 0;
+    }
+
+    public function disconnect(): void
+    {
+        $this->cluster?->disconnect();
+        $this->resetSettingsState();
+        parent::disconnect();
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $bindings
+     * @param  string  $query
+     */
+    protected function tryAgainIfCausedByLostConnection(
+        QueryException $e,
+        $query,
+        $bindings,
+        Closure $callback,
+    ) {
+        if (! $this->isConnectionFailure($e->getPrevious() ?? $e)) {
+            throw $e;
+        }
+
+        if (! $this->queryMayBeRetried($query)) {
+            $this->invalidateFailedConnection();
+
+            throw $e;
+        }
+
+        $configuredRetries = $this->integerConfig('retries', 0);
+        $retries = $this->cluster
+            ? max($configuredRetries, count($this->cluster->getNodes()) - 1)
+            : $configuredRetries;
+        /** @var non-empty-list<QueryException> $failures */
+        $failures = [$e];
+
+        for ($attempt = 1; $attempt <= $retries; $attempt++) {
+            $this->backoff($attempt);
+
+            try {
+                $this->discardFailedConnection();
+
+                return $this->runQueryCallback($query, $bindings, $callback);
+            } catch (QueryException $retryException) {
+                if (! $this->isConnectionFailure($retryException->getPrevious() ?? $retryException)) {
+                    throw $retryException;
+                }
+
+                $failures[] = $retryException;
+            } catch (Throwable $retryException) {
+                if (! $this->isConnectionFailure($retryException)) {
+                    throw $retryException;
+                }
+            }
+        }
+
+        $this->invalidateFailedConnection();
+
+        throw $failures[array_key_last($failures)];
+    }
+
+    protected function queryMayBeRetried(string $query): bool
+    {
+        if (filter_var($this->getConfig('retry_writes') ?? false, FILTER_VALIDATE_BOOL)) {
+            return true;
+        }
+
+        $query = $this->stripLeadingSqlTrivia($query);
+
+        return preg_match('/\A(?:SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|EXISTS)\b/i', $query) === 1;
+    }
+
+    protected function isConnectionFailure(Throwable $exception): bool
+    {
+        $current = $exception;
+
+        do {
+            if (
+                $current instanceof LostConnectionException
+                || $this->isNativeConnectionException($current)
+            ) {
+                return true;
+            }
+
+            if ($current instanceof PDOException) {
+                $sqlState = isset($current->errorInfo[0])
+                    && is_string($current->errorInfo[0])
+                    ? $current->errorInfo[0]
+                    : (string) $current->getCode();
+                if (str_starts_with($sqlState, '08')) {
+                    return true;
+                }
+            }
+
+            if ($this->causedByLostConnection($current)) {
+                return true;
+            }
+
+            if (preg_match(
+                '/connection (?:refused|reset|closed|lost)|broken pipe|network is unreachable|socket|unexpected eof|all clickhouse cluster nodes are unreachable/i',
+                $current->getMessage(),
+            )) {
+                return true;
+            }
+
+            $current = $current->getPrevious();
+        } while ($current instanceof Throwable);
+
+        return false;
+    }
+
+    private function isNativeConnectionException(Throwable $exception): bool
+    {
+        /** @var class-string $connectionException */
+        $connectionException = 'ClickHouse\\Driver\\Exception\\ConnectionException';
+
+        return is_a($exception, $connectionException);
+    }
+
+    private function discardFailedConnection(): void
+    {
+        $this->invalidateFailedConnection();
+
+        if ($this->cluster) {
+            return;
+        }
+
+        $this->reconnect();
+    }
+
+    private function invalidateFailedConnection(): void
+    {
+        $this->resetSettingsState();
+
+        if ($this->cluster) {
+            $this->cluster->invalidateActiveConnection();
+
+            return;
+        }
+
+        parent::disconnect();
+    }
+
+    private function backoff(int $attempt): void
+    {
+        $baseMilliseconds = $this->integerConfig('retry_backoff_ms', 100);
+
+        if ($baseMilliseconds === 0) {
+            return;
+        }
+
+        $milliseconds = min(5000, $baseMilliseconds * (2 ** ($attempt - 1)));
+        usleep($milliseconds * 1000);
+    }
+
+    private function stripLeadingSqlTrivia(string $query): string
+    {
+        do {
+            $previous = $query;
+            $query = ltrim($query);
+            $query = preg_replace('/\A\/\*.*?\*\//s', '', $query) ?? $query;
+            $query = preg_replace('/\A(?:--|#)[^\r\n]*(?:\r\n|\r|\n|$)/', '', $query) ?? $query;
+        } while ($query !== $previous);
+
+        return ltrim($query, " \t\n\r\0\x0B(");
+    }
+
+    private function ensureTransactionPassthrough(): void
+    {
+        if ($this->getConfig('transactions') !== 'passthrough') {
+            throw TransactionsNotSupportedException::make();
+        }
+    }
+
+    private function resetSettingsState(): void
+    {
+        $this->settingsApplied = false;
+        $this->settingsAppliedPdos = null;
+    }
+
+    /** @param array<string, mixed> $config */
+    private function validateRuntimeOptions(array $config): void
+    {
+        $retries = filter_var($config['retries'] ?? 0, FILTER_VALIDATE_INT);
+        if ($retries === false || $retries < 0 || $retries > 100) {
+            throw new \InvalidArgumentException(
+                'ClickHouse retries must be an integer between 0 and 100.'
+            );
+        }
+
+        $backoff = filter_var($config['retry_backoff_ms'] ?? 100, FILTER_VALIDATE_INT);
+        if ($backoff === false || $backoff < 0 || $backoff > 5000) {
+            throw new \InvalidArgumentException(
+                'ClickHouse retry_backoff_ms must be an integer between 0 and 5000.'
+            );
+        }
+
+        if (! is_array($config['settings'] ?? [])) {
+            throw new \InvalidArgumentException('ClickHouse settings must be an array.');
+        }
+
+        if (
+            isset($config['retry_writes'])
+            && filter_var($config['retry_writes'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) === null
+        ) {
+            throw new \InvalidArgumentException('ClickHouse retry_writes must be a boolean.');
+        }
+
+        if (
+            isset($config['use_lightweight_delete'])
+            && filter_var(
+                $config['use_lightweight_delete'],
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE,
+            ) === null
+        ) {
+            throw new \InvalidArgumentException(
+                'ClickHouse use_lightweight_delete must be a boolean.'
+            );
+        }
+
+        $transactionMode = $config['transactions'] ?? 'throw';
+        if (! in_array($transactionMode, ['throw', 'passthrough'], true)) {
+            throw new \InvalidArgumentException(
+                'ClickHouse transactions must be configured as "throw" or "passthrough".'
+            );
+        }
+    }
+
+    private function integerConfig(string $key, int $default): int
+    {
+        $value = filter_var(
+            $this->getConfig($key) ?? $default,
+            FILTER_VALIDATE_INT,
+        );
+
+        if (! is_int($value)) {
+            throw new \InvalidArgumentException(
+                "ClickHouse {$key} must be an integer."
+            );
+        }
+
+        return $value;
     }
 }

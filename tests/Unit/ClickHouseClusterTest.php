@@ -11,7 +11,7 @@ class ClickHouseClusterTest extends TestCase
 {
     protected function createCluster(array $nodes, ?ClickHouseConnector $connector = null): ClickHouseCluster
     {
-        $connector = $connector ?? $this->createMock(ClickHouseConnector::class);
+        $connector = $connector ?? $this->createStub(ClickHouseConnector::class);
 
         return new ClickHouseCluster(
             $nodes,
@@ -20,7 +20,7 @@ class ClickHouseClusterTest extends TestCase
         );
     }
 
-    public function testGetNodesReturnsConfiguredNodes(): void
+    public function test_get_nodes_returns_configured_nodes(): void
     {
         $nodes = [
             ['host' => 'ch01', 'port' => 9000],
@@ -31,7 +31,7 @@ class ClickHouseClusterTest extends TestCase
         $this->assertSame($nodes, $cluster->getNodes());
     }
 
-    public function testActiveIndexStartsAtZero(): void
+    public function test_active_index_starts_at_zero(): void
     {
         $cluster = $this->createCluster([
             ['host' => 'ch01', 'port' => 9000],
@@ -40,7 +40,7 @@ class ClickHouseClusterTest extends TestCase
         $this->assertSame(0, $cluster->getActiveIndex());
     }
 
-    public function testSlideNodeRotatesToNext(): void
+    public function test_slide_node_rotates_to_next(): void
     {
         $cluster = $this->createCluster([
             ['host' => 'ch01', 'port' => 9000],
@@ -55,7 +55,7 @@ class ClickHouseClusterTest extends TestCase
         $this->assertSame(2, $cluster->getActiveIndex());
     }
 
-    public function testSlideNodeWrapsAround(): void
+    public function test_slide_node_wraps_around(): void
     {
         $cluster = $this->createCluster([
             ['host' => 'ch01', 'port' => 9000],
@@ -67,10 +67,10 @@ class ClickHouseClusterTest extends TestCase
         $this->assertSame(0, $cluster->getActiveIndex());
     }
 
-    public function testReadConnectionReturnsPdo(): void
+    public function test_read_connection_returns_pdo(): void
     {
-        $pdo = $this->createMock(PDO::class);
-        $connector = $this->createMock(ClickHouseConnector::class);
+        $pdo = $this->createStub(PDO::class);
+        $connector = $this->createStub(ClickHouseConnector::class);
         $connector->method('connect')->willReturn($pdo);
 
         $cluster = $this->createCluster(
@@ -81,10 +81,10 @@ class ClickHouseClusterTest extends TestCase
         $this->assertSame($pdo, $cluster->getReadConnection());
     }
 
-    public function testReadConnectionFailoverSlidesToNextNode(): void
+    public function test_read_connection_failover_slides_to_next_node(): void
     {
-        $pdo = $this->createMock(PDO::class);
-        $connector = $this->createMock(ClickHouseConnector::class);
+        $pdo = $this->createStub(PDO::class);
+        $connector = $this->createStub(ClickHouseConnector::class);
 
         $callCount = 0;
         $connector->method('connect')->willReturnCallback(
@@ -93,6 +93,7 @@ class ClickHouseClusterTest extends TestCase
                 if ($config['host'] === 'ch01') {
                     throw new \RuntimeException('Node ch01 unreachable');
                 }
+
                 return $pdo;
             }
         );
@@ -110,9 +111,9 @@ class ClickHouseClusterTest extends TestCase
         $this->assertSame(1, $cluster->getActiveIndex());
     }
 
-    public function testReadConnectionThrowsWhenAllNodesUnreachable(): void
+    public function test_read_connection_throws_when_all_nodes_unreachable(): void
     {
-        $connector = $this->createMock(ClickHouseConnector::class);
+        $connector = $this->createStub(ClickHouseConnector::class);
         $connector->method('connect')->willThrowException(new \RuntimeException('Unreachable'));
 
         $cluster = $this->createCluster(
@@ -128,11 +129,11 @@ class ClickHouseClusterTest extends TestCase
         $cluster->getReadConnection();
     }
 
-    public function testWriteConnectionsReturnsAllNodes(): void
+    public function test_write_connections_returns_all_nodes(): void
     {
-        $pdo1 = $this->createMock(PDO::class);
-        $pdo2 = $this->createMock(PDO::class);
-        $connector = $this->createMock(ClickHouseConnector::class);
+        $pdo1 = $this->createStub(PDO::class);
+        $pdo2 = $this->createStub(PDO::class);
+        $connector = $this->createStub(ClickHouseConnector::class);
 
         $connector->method('connect')->willReturnOnConsecutiveCalls($pdo1, $pdo2);
 
@@ -148,10 +149,10 @@ class ClickHouseClusterTest extends TestCase
         $this->assertCount(2, $connections);
     }
 
-    public function testSingleNodeCluster(): void
+    public function test_single_node_cluster(): void
     {
-        $pdo = $this->createMock(PDO::class);
-        $connector = $this->createMock(ClickHouseConnector::class);
+        $pdo = $this->createStub(PDO::class);
+        $connector = $this->createStub(ClickHouseConnector::class);
         $connector->method('connect')->willReturn($pdo);
 
         $cluster = $this->createCluster(
@@ -161,5 +162,51 @@ class ClickHouseClusterTest extends TestCase
 
         $this->assertSame($pdo, $cluster->getReadConnection());
         $this->assertCount(1, $cluster->getWriteConnections());
+    }
+
+    public function test_empty_cluster_is_rejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->createCluster([]);
+    }
+
+    public function test_node_without_host_is_rejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->createCluster([['port' => 9000]]);
+    }
+
+    public function test_invalid_node_configuration_is_not_hidden_by_failover(): void
+    {
+        $cluster = $this->createCluster(
+            [
+                ['host' => 'ch01', 'port' => -1],
+                ['host' => 'ch02', 'port' => 9000],
+            ],
+            new ClickHouseConnector,
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $cluster->getReadConnection();
+    }
+
+    public function test_invalidating_active_connection_rotates_and_reconnects(): void
+    {
+        $pdo1 = $this->createStub(PDO::class);
+        $pdo2 = $this->createStub(PDO::class);
+        $connector = $this->createMock(ClickHouseConnector::class);
+        $connector->expects($this->exactly(2))
+            ->method('connect')
+            ->willReturnOnConsecutiveCalls($pdo1, $pdo2);
+
+        $cluster = $this->createCluster([
+            ['host' => 'ch01', 'port' => 9000],
+            ['host' => 'ch02', 'port' => 9000],
+        ], $connector);
+
+        $this->assertSame($pdo1, $cluster->getReadConnection());
+        $cluster->invalidateActiveConnection();
+        $this->assertSame(1, $cluster->getActiveIndex());
+        $this->assertSame($pdo2, $cluster->getReadConnection());
     }
 }

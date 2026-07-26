@@ -17,16 +17,16 @@ abstract class TestCase extends BaseTestCase
     protected function getEnvironmentSetUp($app): void
     {
         $app['config']->set('database.connections.clickhouse', [
-            'driver'   => 'clickhouse',
-            'host'     => env('CLICKHOUSE_HOST', 'localhost'),
-            'port'     => env('CLICKHOUSE_PORT', 9000),
+            'driver' => 'clickhouse',
+            'host' => env('CLICKHOUSE_HOST', 'localhost'),
+            'port' => env('CLICKHOUSE_PORT', 9000),
             'database' => env('CLICKHOUSE_DATABASE', 'default'),
             'username' => env('CLICKHOUSE_USERNAME', 'default'),
             'password' => env('CLICKHOUSE_PASSWORD', ''),
-            'timeout'  => 5,
-            'retries'  => 0,
+            'timeout' => 5,
+            'retries' => 0,
             'settings' => [],
-            'options'  => ['final' => false],
+            'options' => ['final' => false],
         ]);
     }
 

@@ -22,9 +22,12 @@ trait HasClickHouseTimestamps
 {
     public static function bootHasClickHouseTimestamps(): void
     {
+        static::saving(function (self $model) {
+            $model->updated_at = now();
+        });
+
         static::creating(function (self $model) {
             $model->created_at ??= now();
-            $model->updated_at ??= now();
         });
     }
 

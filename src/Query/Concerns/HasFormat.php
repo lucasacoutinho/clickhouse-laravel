@@ -2,6 +2,8 @@
 
 namespace ClickHouse\Laravel\Query\Concerns;
 
+use ClickHouse\Laravel\Support\ClickHouseSql;
+
 trait HasFormat
 {
     public ?string $outputFormat = null;
@@ -16,7 +18,8 @@ trait HasFormat
      */
     public function format(string $format): static
     {
-        $this->outputFormat = $format;
+        $this->outputFormat = ClickHouseSql::token($format, 'output format');
+
         return $this;
     }
 }

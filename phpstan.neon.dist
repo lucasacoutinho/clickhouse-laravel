@@ -1,0 +1,9 @@
+parameters:
+    level: max
+    paths:
+        - src
+    reportUnmatchedIgnoredErrors: true
+    ignoreErrors:
+        -
+            message: '#Trait ClickHouse\\Laravel\\Concerns\\HasClickHouseTimestamps is used zero times#'
+            path: src/Concerns/HasClickHouseTimestamps.php

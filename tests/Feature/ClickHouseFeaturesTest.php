@@ -2,13 +2,14 @@
 
 namespace ClickHouse\Laravel\Tests\Feature;
 
+use ClickHouse\Laravel\Support\ClickHouseValue;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\Group;
 
 /**
  * Integration tests for ClickHouse-specific query features.
- *
- * @group integration
  */
+#[Group('integration')]
 class ClickHouseFeaturesTest extends FeatureTestCase
 {
     protected function setUp(): void
@@ -62,11 +63,11 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         for ($i = 1; $i <= $count; $i++) {
             $tagSet = $tags[$i % count($tags)];
             $rows[] = [
-                'id'      => $i,
+                'id' => $i,
                 'user_id' => ($i % 5) + 1,
-                'event'   => $i % 3 === 0 ? 'purchase' : ($i % 2 === 0 ? 'click' : 'view'),
-                'tags'    => "['" . implode("','", $tagSet) . "']",
-                'score'   => round($i * 0.15, 2),
+                'event' => $i % 3 === 0 ? 'purchase' : ($i % 2 === 0 ? 'click' : 'view'),
+                'tags' => ClickHouseValue::array($tagSet),
+                'score' => round($i * 0.15, 2),
                 'version' => 1,
             ];
         }
@@ -91,14 +92,14 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         for ($i = 0; $i < 10; $i++) {
             // Insert every 2 minutes to create gaps for WITH FILL
             $rows[] = [
-                'ts'    => date('Y-m-d H:i:s', $base + ($i * 120)),
+                'ts' => date('Y-m-d H:i:s', $base + ($i * 120)),
                 'value' => round(rand(10, 100) / 10, 1),
             ];
         }
         DB::connection('clickhouse')->table('_test_timeseries')->insert($rows);
     }
 
-    public function testFinal(): void
+    public function test_final(): void
     {
         $this->seedEvents();
 
@@ -123,7 +124,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertLessThanOrEqual(count($withoutFinal), count($withFinal));
     }
 
-    public function testSample(): void
+    public function test_sample(): void
     {
         $this->seedEvents(100);
 
@@ -141,7 +142,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertGreaterThan(0, $sampled);
     }
 
-    public function testPreWhereExecutes(): void
+    public function test_pre_where_executes(): void
     {
         $this->seedEvents();
 
@@ -158,7 +159,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testPreWhereIn(): void
+    public function test_pre_where_in(): void
     {
         $this->seedEvents();
 
@@ -173,7 +174,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testPreWhereBetween(): void
+    public function test_pre_where_between(): void
     {
         $this->seedEvents();
 
@@ -189,7 +190,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testPreWhereRaw(): void
+    public function test_pre_where_raw(): void
     {
         $this->seedEvents();
 
@@ -204,7 +205,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testPreWhereWithOrPreWhere(): void
+    public function test_pre_where_with_or_pre_where(): void
     {
         $this->seedEvents();
 
@@ -220,7 +221,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testArrayJoin(): void
+    public function test_array_join(): void
     {
         $this->seedEvents();
 
@@ -235,7 +236,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertGreaterThan(5, count($rows));
     }
 
-    public function testLeftArrayJoin(): void
+    public function test_left_array_join(): void
     {
         $this->seedEvents();
 
@@ -253,7 +254,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertGreaterThanOrEqual($rowsInner, $rowsLeft);
     }
 
-    public function testLimitBy(): void
+    public function test_limit_by(): void
     {
         $this->seedEvents();
 
@@ -274,7 +275,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testLimitByWithLimit(): void
+    public function test_limit_by_with_limit(): void
     {
         $this->seedEvents();
 
@@ -288,7 +289,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertCount(3, $rows);
     }
 
-    public function testAnyLeftJoinUsing(): void
+    public function test_any_left_join_using(): void
     {
         $this->seedEvents();
         $this->seedUsers();
@@ -304,7 +305,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertNotEmpty($rows[0]->name);
     }
 
-    public function testAllInnerJoin(): void
+    public function test_all_inner_join(): void
     {
         $this->seedEvents();
         $this->seedUsers();
@@ -322,7 +323,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testJoinWithOnCondition(): void
+    public function test_join_with_on_condition(): void
     {
         $this->seedEvents();
         $this->seedUsers();
@@ -337,7 +338,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertCount(5, $rows);
     }
 
-    public function testJoinWithSubquery(): void
+    public function test_join_with_subquery(): void
     {
         $this->seedEvents();
         $this->seedUsers();
@@ -357,7 +358,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertNotEmpty($rows);
     }
 
-    public function testFormat(): void
+    public function test_format(): void
     {
         $this->seedEvents();
 
@@ -366,12 +367,13 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $rows = DB::connection('clickhouse')
             ->table('_test_features')
             ->limit(5)
+            ->format('JSONEachRow')
             ->get();
 
         $this->assertCount(5, $rows);
     }
 
-    public function testSettingsApplied(): void
+    public function test_settings_applied(): void
     {
         $this->seedEvents();
 
@@ -384,14 +386,14 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertCount(20, $rows);
     }
 
-    public function testWithFillTimeSeries(): void
+    public function test_with_fill_time_series(): void
     {
         $this->seedTimeseries();
 
         // Data has gaps (every 2 minutes). Fill every 1 minute.
         $rows = DB::connection('clickhouse')
             ->table('_test_timeseries')
-            ->selectRaw("toStartOfMinute(ts) AS bucket, count() AS cnt")
+            ->selectRaw('toStartOfMinute(ts) AS bucket, count() AS cnt')
             ->groupByRaw('bucket')
             ->orderBy('bucket')
             ->withFillTime('2026-03-24 10:00:00', '2026-03-24 10:20:00', '1 minute')
@@ -401,13 +403,13 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertGreaterThan(10, count($rows));
     }
 
-    public function testWithFillRaw(): void
+    public function test_with_fill_raw(): void
     {
         $this->seedTimeseries();
 
         $rows = DB::connection('clickhouse')
             ->table('_test_timeseries')
-            ->selectRaw("toStartOfMinute(ts) AS bucket, sum(value) AS total")
+            ->selectRaw('toStartOfMinute(ts) AS bucket, sum(value) AS total')
             ->groupByRaw('bucket')
             ->orderBy('bucket')
             ->withFillRaw("FROM toDateTime('2026-03-24 10:00:00') TO toDateTime('2026-03-24 10:20:00') STEP toIntervalMinute(1)")
@@ -416,13 +418,13 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertGreaterThan(10, count($rows));
     }
 
-    public function testWithFillInterpolate(): void
+    public function test_with_fill_interpolate(): void
     {
         $this->seedTimeseries();
 
         $rows = DB::connection('clickhouse')
             ->table('_test_timeseries')
-            ->selectRaw("toStartOfMinute(ts) AS bucket, sum(value) AS total")
+            ->selectRaw('toStartOfMinute(ts) AS bucket, sum(value) AS total')
             ->groupByRaw('bucket')
             ->orderBy('bucket')
             ->withFillTime('2026-03-24 10:00:00', '2026-03-24 10:20:00', '1 minute')
@@ -432,7 +434,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertGreaterThan(10, count($rows));
     }
 
-    public function testComplexAnalyticsQuery(): void
+    public function test_complex_analytics_query(): void
     {
         $this->seedEvents(50);
         $this->seedUsers();
@@ -459,7 +461,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         }
     }
 
-    public function testAsyncInsertSetting(): void
+    public function test_async_insert_setting(): void
     {
         // Verify async() applies the setting and insert doesn't throw
         DB::connection('clickhouse')
@@ -480,7 +482,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
         $this->assertEquals(1, $count);
     }
 
-    public function testCombinedFinalPrewhereSampleSettings(): void
+    public function test_combined_final_prewhere_sample_settings(): void
     {
         $this->seedEvents(100);
 

@@ -5,7 +5,40 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  quality:
+    name: Code quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: >-
+          composer install
+          --no-interaction
+          --prefer-dist
+          --ignore-platform-req=ext-clickhouse
+          --ignore-platform-req=ext-pdo_clickhouse
+
+      - name: Check formatting
+        run: composer format:check
+
+      - name: Run PHPStan and Psalm
+        run: composer analyse
+
   unit:
     name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
     runs-on: ubuntu-latest
@@ -14,21 +47,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - php: '8.1'
-            laravel: '10.*'
-            testbench: '8.*'
           - php: '8.2'
-            laravel: '11.*'
-            testbench: '9.*'
+            laravel: '12.*'
+            testbench: '10.*'
           - php: '8.3'
             laravel: '12.*'
             testbench: '10.*'
+          - php: '8.3'
+            laravel: '13.*'
+            testbench: '11.*'
           - php: '8.4'
-            laravel: '12.*'
-            testbench: '10.*'
+            laravel: '13.*'
+            testbench: '11.*'
+          - php: '8.5'
+            laravel: '13.*'
+            testbench: '11.*'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -37,22 +73,39 @@ jobs:
           extensions: pdo
           coverage: none
 
+      - name: Select framework versions
+        run: >-
+          composer require
+          "illuminate/database:${{ matrix.laravel }}"
+          "illuminate/support:${{ matrix.laravel }}"
+          "orchestra/testbench:${{ matrix.testbench }}"
+          --no-update
+          --no-interaction
+
       - name: Install dependencies
-        run: |
-          composer require "illuminate/database:${{ matrix.laravel }}" "illuminate/support:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-update
-          composer install --no-interaction --prefer-dist --ignore-platform-req=ext-pdo_clickhouse
+        run: >-
+          composer install
+          --no-interaction
+          --prefer-dist
+          --ignore-platform-req=ext-clickhouse
+          --ignore-platform-req=ext-pdo_clickhouse
 
       - name: Run unit tests
-        run: vendor/bin/phpunit --testsuite Unit
+        run: composer test:unit
 
   integration:
-    name: Integration (ClickHouse)
+    name: ClickHouse ${{ matrix.clickhouse }} / PHP 8.5 / Laravel 13
     runs-on: ubuntu-latest
-    needs: unit
+    needs: [quality, unit]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        clickhouse: ['26.3', '26.6']
 
     services:
       clickhouse1:
-        image: clickhouse/clickhouse-server:24.8
+        image: clickhouse/clickhouse-server:${{ matrix.clickhouse }}
         env:
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
           CLICKHOUSE_PASSWORD: ""
@@ -62,9 +115,9 @@ jobs:
           --health-cmd "clickhouse-client --query 'SELECT 1'"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
       clickhouse2:
-        image: clickhouse/clickhouse-server:24.8
+        image: clickhouse/clickhouse-server:${{ matrix.clickhouse }}
         env:
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
           CLICKHOUSE_PASSWORD: ""
@@ -74,48 +127,54 @@ jobs:
           --health-cmd "clickhouse-client --query 'SELECT 1'"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.5'
           extensions: pdo
           coverage: none
 
-      - name: Clone extensions
-        env:
-          GH_TOKEN: ${{ secrets.PDO_GITHUB_TOKEN }}
+      - name: Install native build dependencies
         run: |
-          git clone --recursive "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git" /tmp/build/ext-clickhouse
-          git clone "https://${GH_TOKEN}@github.com/lightprofco/ext-clickhouse-pdo.git" /tmp/build/ext-clickhouse-pdo
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf \
+            g++ \
+            libssl-dev \
+            make \
+            pkg-config
 
-      - name: Compute cache key from cloned repos
-        id: ext-versions
+      - name: Clone released extensions
         run: |
-          EXT_SHA=$(git -C /tmp/build/ext-clickhouse rev-parse HEAD)
-          PDO_SHA=$(git -C /tmp/build/ext-clickhouse-pdo rev-parse HEAD)
-          PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
-          echo "cache-key=ext-clickhouse-${PHP_VER}-${EXT_SHA}-${PDO_SHA}" >> "$GITHUB_OUTPUT"
+          git clone --branch v1.2.0 --depth 1 --recurse-submodules \
+            https://github.com/lucasacoutinho/ext-clickhouse.git /tmp/build/ext-clickhouse
+          git clone --branch v1.2.0 --depth 1 \
+            https://github.com/lucasacoutinho/ext-clickhouse-pdo.git /tmp/build/ext-clickhouse-pdo
 
       - name: Cache compiled extensions
         id: ext-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/ext-compiled
-          key: ${{ steps.ext-versions.outputs.cache-key }}
+          key: clickhouse-extensions-v1.2.0-php8.5-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Build extensions
+      - name: Build released extensions
         if: steps.ext-cache.outputs.cache-hit != 'true'
         run: |
           cd /tmp/build/ext-clickhouse
-          phpize && ./configure && make -j$(nproc)
+          phpize
+          ./configure
+          make -j"$(nproc)"
 
           cd /tmp/build/ext-clickhouse-pdo
-          phpize && ./configure --enable-pdo-clickhouse && make -j$(nproc)
+          phpize
+          ./configure --enable-pdo-clickhouse
+          make -j"$(nproc)"
 
           mkdir -p /tmp/ext-compiled
           cp /tmp/build/ext-clickhouse/modules/clickhouse.so /tmp/ext-compiled/
@@ -123,57 +182,36 @@ jobs:
 
       - name: Install extensions
         run: |
-          PHP_EXT_DIR=$(php -r 'echo ini_get("extension_dir");')
-          sudo cp /tmp/ext-compiled/clickhouse.so "${PHP_EXT_DIR}/"
-          sudo cp /tmp/ext-compiled/pdo_clickhouse.so "${PHP_EXT_DIR}/"
+          php_ext_dir="$(php -r 'echo ini_get("extension_dir");')"
+          sudo cp /tmp/ext-compiled/clickhouse.so "${php_ext_dir}/"
+          sudo cp /tmp/ext-compiled/pdo_clickhouse.so "${php_ext_dir}/"
 
-          PHP_INI_DIR=$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')
-          echo "extension=clickhouse.so" | sudo tee "${PHP_INI_DIR}/30-clickhouse.ini"
-          echo "extension=pdo_clickhouse.so" | sudo tee "${PHP_INI_DIR}/31-pdo_clickhouse.ini"
+          php_ini_dir="$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')"
+          echo "extension=clickhouse.so" | sudo tee "${php_ini_dir}/30-clickhouse.ini"
+          echo "extension=pdo_clickhouse.so" | sudo tee "${php_ini_dir}/31-pdo_clickhouse.ini"
 
-      - name: Verify extensions
-        run: |
-          php -m | grep -i clickhouse
-          php -r "echo 'PDO drivers: ' . implode(', ', PDO::getAvailableDrivers()) . PHP_EOL;"
-
-      - name: Wait for ClickHouse ports
-        run: |
-          for port in 9000 9001; do
-            echo "Waiting for port ${port}..."
-            for i in $(seq 1 30); do
-              if bash -c "echo > /dev/tcp/127.0.0.1/${port}" 2>/dev/null; then
-                echo "Port ${port} is ready"
-                break
-              fi
-              sleep 1
-            done
-          done
-
-      - name: Test ClickHouse connectivity
-        shell: bash
+      - name: Verify extension releases
         run: |
           php -r '
-          echo "=== Native Client ===" . PHP_EOL;
-          if (class_exists("ClickHouse\Driver\ClientOptions")) {
-              try {
-                  $opts = new ClickHouse\Driver\ClientOptions(host: "127.0.0.1", port: 9000);
-                  $client = new ClickHouse\Driver\Client($opts);
-                  echo "Native: CONNECTED" . PHP_EOL;
-              } catch (Throwable $e) {
-                  echo "Native: " . get_class($e) . ": " . $e->getMessage() . PHP_EOL;
-              }
-          } else { echo "ext-clickhouse NOT loaded" . PHP_EOL; }
-          echo PHP_EOL . "=== PDO ===" . PHP_EOL;
-          foreach ([9000, 9001] as $port) {
-              try {
-                  $pdo = new PDO("clickhouse:host=127.0.0.1;port={$port};dbname=default", "default", "");
-                  $r = $pdo->query("SELECT 1 AS v");
-                  echo "Port {$port}: OK (" . $r->fetchColumn() . ")" . PHP_EOL;
-              } catch (Throwable $e) {
-                  echo "Port {$port}: " . get_class($e) . ": " . $e->getMessage() . PHP_EOL;
+          foreach (["clickhouse", "pdo_clickhouse"] as $extension) {
+              $version = phpversion($extension);
+              if ($version !== "1.2.0") {
+                  throw new RuntimeException("Expected {$extension} 1.2.0, got {$version}");
               }
           }
+          if (!in_array("clickhouse", PDO::getAvailableDrivers(), true)) {
+              throw new RuntimeException("PDO ClickHouse driver is unavailable");
+          }
           '
+
+      - name: Select Laravel 13
+        run: >-
+          composer require
+          "illuminate/database:13.*"
+          "illuminate/support:13.*"
+          "orchestra/testbench:11.*"
+          --no-update
+          --no-interaction
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
@@ -184,4 +222,4 @@ jobs:
           CLICKHOUSE_PORT: 9000
           CLICKHOUSE_PORT_2: 9001
           CLICKHOUSE_DATABASE: default
-        run: vendor/bin/phpunit --testsuite Integration
+        run: composer test:integration

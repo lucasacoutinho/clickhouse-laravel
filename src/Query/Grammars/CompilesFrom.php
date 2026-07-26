@@ -7,6 +7,7 @@ use Illuminate\Database\Query\Builder;
 
 trait CompilesFrom
 {
+    /** @param string $table */
     protected function compileFrom(Builder $query, $table): string
     {
         $from = parent::compileFrom($query, $table);
@@ -16,7 +17,11 @@ trait CompilesFrom
                 $from .= ' FINAL';
             }
             if ($query->sampleClause !== null) {
-                $from .= ' SAMPLE ' . $query->sampleClause;
+                $from .= ' SAMPLE '.$query->sampleClause;
+
+                if ($query->sampleOffsetClause !== null) {
+                    $from .= ' OFFSET '.$query->sampleOffsetClause;
+                }
             }
         }
 

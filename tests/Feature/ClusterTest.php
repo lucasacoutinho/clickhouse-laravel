@@ -4,14 +4,14 @@ namespace ClickHouse\Laravel\Tests\Feature;
 
 use ClickHouse\Laravel\ClickHouseConnection;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\Group;
 
 /**
- * Integration tests for cluster failover and distributed writes.
+ * Integration tests for cluster failover and single-execution writes.
  * Requires two ClickHouse instances on ports 9000 and 9001.
- *
- * @group integration
- * @group cluster
  */
+#[Group('integration')]
+#[Group('cluster')]
 class ClusterTest extends FeatureTestCase
 {
     protected function getEnvironmentSetUp($app): void
@@ -21,31 +21,45 @@ class ClusterTest extends FeatureTestCase
         $port2 = env('CLICKHOUSE_PORT_2', 9001);
 
         $app['config']->set('database.connections.clickhouse_cluster', [
-            'driver'   => 'clickhouse',
+            'driver' => 'clickhouse',
             'database' => env('CLICKHOUSE_DATABASE', 'default'),
             'username' => env('CLICKHOUSE_USERNAME', 'default'),
             'password' => env('CLICKHOUSE_PASSWORD', ''),
-            'timeout'  => 5,
-            'retries'  => 0,
+            'timeout' => 5,
+            'retries' => 0,
             'settings' => [],
-            'options'  => ['final' => false],
-            'cluster'  => [
+            'options' => ['final' => false],
+            'cluster' => [
                 ['host' => '127.0.0.1', 'port' => (int) env('CLICKHOUSE_PORT', 9000)],
                 ['host' => '127.0.0.1', 'port' => (int) $port2],
             ],
         ]);
 
         $app['config']->set('database.connections.clickhouse_node2', [
-            'driver'   => 'clickhouse',
-            'host'     => '127.0.0.1',
-            'port'     => (int) $port2,
+            'driver' => 'clickhouse',
+            'host' => '127.0.0.1',
+            'port' => (int) $port2,
             'database' => env('CLICKHOUSE_DATABASE', 'default'),
             'username' => env('CLICKHOUSE_USERNAME', 'default'),
             'password' => env('CLICKHOUSE_PASSWORD', ''),
-            'timeout'  => 5,
-            'retries'  => 0,
+            'timeout' => 5,
+            'retries' => 0,
             'settings' => [],
-            'options'  => ['final' => false],
+            'options' => ['final' => false],
+        ]);
+
+        $app['config']->set('database.connections.clickhouse_cluster_failover', [
+            'driver' => 'clickhouse',
+            'database' => env('CLICKHOUSE_DATABASE', 'default'),
+            'username' => env('CLICKHOUSE_USERNAME', 'default'),
+            'password' => env('CLICKHOUSE_PASSWORD', ''),
+            'timeout' => 1,
+            'retries' => 0,
+            'settings' => [],
+            'cluster' => [
+                ['host' => '127.0.0.1', 'port' => 65534],
+                ['host' => '127.0.0.1', 'port' => (int) $port2],
+            ],
         ]);
     }
 
@@ -87,19 +101,19 @@ class ClusterTest extends FeatureTestCase
         parent::tearDown();
     }
 
-    public function testClusterConnectionResolves(): void
+    public function test_cluster_connection_resolves(): void
     {
         $conn = $this->clusterConn();
         $this->assertInstanceOf(ClickHouseConnection::class, $conn);
         $this->assertNotNull($conn->getCluster());
     }
 
-    public function testClusterHasTwoNodes(): void
+    public function test_cluster_has_two_nodes(): void
     {
         $this->assertCount(2, $this->clusterConn()->getCluster()->getNodes());
     }
 
-    public function testReadFromCluster(): void
+    public function test_read_from_cluster(): void
     {
         $this->node1()->table('_test_cluster')->insert([
             ['id' => 1, 'name' => 'from_node1'],
@@ -109,34 +123,35 @@ class ClusterTest extends FeatureTestCase
         $this->assertNotEmpty($rows);
     }
 
-    public function testDistributedWriteReachesBothNodes(): void
+    public function test_write_executes_once_on_active_node(): void
     {
         $this->clusterConn()->table('_test_cluster')->insert([
             ['id' => 100, 'name' => 'distributed'],
         ]);
 
         $node1Row = $this->node1()->table('_test_cluster')->where('id', 100)->first();
-        $node2Row = $this->node2()->table('_test_cluster')->where('id', 100)->first();
-
         $this->assertNotNull($node1Row, 'Row should exist on node 1');
-        $this->assertNotNull($node2Row, 'Row should exist on node 2');
         $this->assertEquals('distributed', $node1Row->name);
-        $this->assertEquals('distributed', $node2Row->name);
+        $this->assertNull(
+            $this->node2()->table('_test_cluster')->where('id', 100)->first(),
+            'The Laravel client must not fan out writes behind ClickHouse replication.',
+        );
     }
 
-    public function testDistributedWriteMultipleRows(): void
+    public function test_write_reports_inserted_rows_and_does_not_fan_out(): void
     {
-        $this->clusterConn()->table('_test_cluster')->insert([
+        $inserted = $this->clusterConn()->table('_test_cluster')->insert([
             ['id' => 1, 'name' => 'Alice'],
             ['id' => 2, 'name' => 'Bob'],
             ['id' => 3, 'name' => 'Charlie'],
         ]);
 
+        $this->assertTrue($inserted);
         $this->assertEquals(3, $this->node1()->table('_test_cluster')->count());
-        $this->assertEquals(3, $this->node2()->table('_test_cluster')->count());
+        $this->assertEquals(0, $this->node2()->table('_test_cluster')->count());
     }
 
-    public function testClusterReadFailover(): void
+    public function test_cluster_read_failover(): void
     {
         $this->node1()->table('_test_cluster')->insert([
             ['id' => 1, 'name' => 'exists'],
@@ -145,35 +160,40 @@ class ClusterTest extends FeatureTestCase
             ['id' => 1, 'name' => 'exists'],
         ]);
 
-        // Both nodes have data — cluster read should work regardless of which node is active
-        $rows = $this->clusterConn()->table('_test_cluster')->get();
+        $rows = DB::connection('clickhouse_cluster_failover')
+            ->table('_test_cluster')
+            ->get();
+
         $this->assertNotEmpty($rows);
+        $this->assertSame(1, DB::connection('clickhouse_cluster_failover')->getCluster()->getActiveIndex());
     }
 
-    public function testClusterInsertChunked(): void
+    public function test_cluster_insert_chunked(): void
     {
-        $rows = array_map(fn($i) => ['id' => $i, 'name' => "row_{$i}"], range(1, 50));
+        $rows = array_map(fn ($i) => ['id' => $i, 'name' => "row_{$i}"], range(1, 50));
 
         $this->clusterConn()->table('_test_cluster')->insertChunked($rows, 10);
 
         $this->assertEquals(50, $this->node1()->table('_test_cluster')->count());
-        $this->assertEquals(50, $this->node2()->table('_test_cluster')->count());
+        $this->assertEquals(0, $this->node2()->table('_test_cluster')->count());
     }
 
-    public function testClusterTruncate(): void
+    public function test_cluster_truncate(): void
     {
         $this->clusterConn()->table('_test_cluster')->insert([
             ['id' => 1, 'name' => 'to_delete'],
         ]);
+        $this->node2()->table('_test_cluster')->insert([
+            ['id' => 2, 'name' => 'must_remain'],
+        ]);
 
-        // Truncate goes through statement() which distributes to all nodes
         $this->clusterConn()->table('_test_cluster')->truncate();
 
         $this->assertEquals(0, $this->node1()->table('_test_cluster')->count());
-        $this->assertEquals(0, $this->node2()->table('_test_cluster')->count());
+        $this->assertEquals(1, $this->node2()->table('_test_cluster')->count());
     }
 
-    public function testBothNodesIndependent(): void
+    public function test_both_nodes_independent(): void
     {
         // Write directly to each node — verify they're separate instances
         $this->node1()->table('_test_cluster')->insert([['id' => 1, 'name' => 'node1_only']]);

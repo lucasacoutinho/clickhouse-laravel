@@ -3,10 +3,9 @@
 namespace ClickHouse\Laravel\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @group integration
- */
+#[Group('integration')]
 class SchemaTest extends FeatureTestCase
 {
     protected function tearDown(): void
@@ -17,7 +16,7 @@ class SchemaTest extends FeatureTestCase
         parent::tearDown();
     }
 
-    public function testCreateAndDropTable(): void
+    public function test_create_and_drop_table(): void
     {
         $schema = DB::connection('clickhouse')->getSchemaBuilder();
 
@@ -36,7 +35,7 @@ class SchemaTest extends FeatureTestCase
         $this->assertFalse($schema->hasTable('_test_schema'));
     }
 
-    public function testCreateWithPartitionAndSettings(): void
+    public function test_create_with_partition_and_settings(): void
     {
         $schema = DB::connection('clickhouse')->getSchemaBuilder();
 
@@ -58,7 +57,38 @@ class SchemaTest extends FeatureTestCase
         $this->assertContains('ts', $columns);
     }
 
-    public function testCreateWithCompressionCodecs(): void
+    public function test_create_with_sampling_ttl_settings_and_comment(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $schema = $connection->getSchemaBuilder();
+
+        $schema->create('_test_schema', function ($table) {
+            $table->uint64('id');
+            $table->dateTime('expires_at');
+            $table->engine('MergeTree()');
+            $table->orderBy('id');
+            $table->sampleBy('id');
+            $table->ttl('expires_at + INTERVAL 1 DAY');
+            $table->setting('index_granularity', 4096);
+            $table->tableComment("Laravel's ClickHouse table");
+        });
+
+        $metadata = $connection
+            ->table('system.tables')
+            ->where('database', 'default')
+            ->where('name', '_test_schema')
+            ->first();
+
+        $this->assertNotNull($metadata);
+        $this->assertSame('id', $metadata->sampling_key);
+        $this->assertSame("Laravel's ClickHouse table", $metadata->comment);
+        $this->assertStringContainsString(
+            'expires_at + toIntervalDay(1)',
+            $metadata->create_table_query,
+        );
+    }
+
+    public function test_create_with_compression_codecs(): void
     {
         $schema = DB::connection('clickhouse')->getSchemaBuilder();
 
@@ -73,7 +103,7 @@ class SchemaTest extends FeatureTestCase
         $this->assertTrue($schema->hasTable('_test_codec'));
     }
 
-    public function testCreateWithAllColumnTypes(): void
+    public function test_create_with_all_column_types(): void
     {
         $schema = DB::connection('clickhouse')->getSchemaBuilder();
 
@@ -109,7 +139,41 @@ class SchemaTest extends FeatureTestCase
         $this->assertContains('country', $columns);
     }
 
-    public function testAddColumn(): void
+    public function test_native_bool_json_date32_time_and_time64_types(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $schema = $connection->getSchemaBuilder();
+
+        $schema->create('_test_schema', function ($table) {
+            $table->uint64('id');
+            $table->boolean('flag');
+            $table->json('payload');
+            $table->nativeJson('native_payload');
+            $table->date32('historical_day');
+            $table->time('clock_time');
+            $table->time64('precise_time', 6);
+            $table->string('country')->nullable()->lowCardinality();
+            $table->engine('MergeTree()');
+            $table->orderBy('id');
+        });
+
+        $types = $connection
+            ->table('system.columns')
+            ->where('database', 'default')
+            ->where('table', '_test_schema')
+            ->pluck('type', 'name')
+            ->all();
+
+        $this->assertSame('Bool', $types['flag']);
+        $this->assertSame('String', $types['payload']);
+        $this->assertSame('JSON', $types['native_payload']);
+        $this->assertSame('Date32', $types['historical_day']);
+        $this->assertSame('Time', $types['clock_time']);
+        $this->assertSame('Time64(6)', $types['precise_time']);
+        $this->assertSame('LowCardinality(Nullable(String))', $types['country']);
+    }
+
+    public function test_add_column(): void
     {
         $conn = DB::connection('clickhouse');
         $schema = $conn->getSchemaBuilder();
@@ -124,7 +188,7 @@ class SchemaTest extends FeatureTestCase
         $this->assertContains('email', $columns);
     }
 
-    public function testDropColumn(): void
+    public function test_drop_column(): void
     {
         $conn = DB::connection('clickhouse');
         $schema = $conn->getSchemaBuilder();
@@ -139,7 +203,77 @@ class SchemaTest extends FeatureTestCase
         $this->assertNotContains('name', $columns);
     }
 
-    public function testGetTables(): void
+    public function test_rename_change_skip_index_and_projection(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $schema = $connection->getSchemaBuilder();
+
+        $connection->statement(
+            'CREATE TABLE _test_schema (id UInt64, name String, score Float64) '
+            .'ENGINE = MergeTree() ORDER BY id'
+        );
+
+        $schema->table('_test_schema', function ($table) {
+            $table->renameColumn('name', 'label');
+        });
+        $schema->table('_test_schema', function ($table) {
+            $table->lowCardinalityString('label')->change();
+        });
+        $schema->table('_test_schema', function ($table) {
+            $table->skipIndex('idx_score', 'score', 'minmax');
+            $table->projection('by_id', 'SELECT id, sum(score) GROUP BY id');
+        });
+
+        $types = $connection
+            ->table('system.columns')
+            ->where('database', 'default')
+            ->where('table', '_test_schema')
+            ->pluck('type', 'name')
+            ->all();
+
+        $this->assertArrayNotHasKey('name', $types);
+        $this->assertSame('LowCardinality(String)', $types['label']);
+        $this->assertSame(
+            1,
+            $connection->table('system.data_skipping_indices')
+                ->where('database', 'default')
+                ->where('table', '_test_schema')
+                ->where('name', 'idx_score')
+                ->count(),
+        );
+        $this->assertSame(
+            1,
+            $connection->table('system.projections')
+                ->where('database', 'default')
+                ->where('table', '_test_schema')
+                ->where('name', 'by_id')
+                ->count(),
+        );
+
+        $schema->table('_test_schema', function ($table) {
+            $table->dropSkipIndex('idx_score');
+            $table->dropProjection('by_id');
+        });
+
+        $this->assertSame(
+            0,
+            $connection->table('system.data_skipping_indices')
+                ->where('database', 'default')
+                ->where('table', '_test_schema')
+                ->where('name', 'idx_score')
+                ->count(),
+        );
+        $this->assertSame(
+            0,
+            $connection->table('system.projections')
+                ->where('database', 'default')
+                ->where('table', '_test_schema')
+                ->where('name', 'by_id')
+                ->count(),
+        );
+    }
+
+    public function test_get_tables(): void
     {
         $conn = DB::connection('clickhouse');
         $conn->statement('CREATE TABLE _test_schema (id UInt64) ENGINE = MergeTree() ORDER BY id');
@@ -147,9 +281,19 @@ class SchemaTest extends FeatureTestCase
         $tables = $conn->getSchemaBuilder()->getTables();
         $this->assertIsArray($tables);
         $this->assertNotEmpty($tables);
+
+        $table = collect($tables)->firstWhere('name', '_test_schema');
+
+        $this->assertNotNull($table);
+        $this->assertSame('default', $table['schema']);
+        $this->assertSame('default._test_schema', $table['schema_qualified_name']);
+        $this->assertNull($table['size']);
+        $this->assertNull($table['comment']);
+        $this->assertNull($table['collation']);
+        $this->assertNull($table['engine']);
     }
 
-    public function testForeignThrows(): void
+    public function test_foreign_throws(): void
     {
         $this->expectException(\RuntimeException::class);
 
@@ -159,7 +303,7 @@ class SchemaTest extends FeatureTestCase
         });
     }
 
-    public function testUniqueThrows(): void
+    public function test_unique_throws(): void
     {
         $this->expectException(\RuntimeException::class);
 

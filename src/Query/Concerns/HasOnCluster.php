@@ -2,6 +2,8 @@
 
 namespace ClickHouse\Laravel\Query\Concerns;
 
+use ClickHouse\Laravel\Support\ClickHouseSql;
+
 /**
  * ON CLUSTER — execute DDL and mutations on a named ClickHouse cluster.
  *
@@ -14,7 +16,8 @@ trait HasOnCluster
 
     public function onCluster(string $cluster): static
     {
-        $this->clusterName = $cluster;
+        $this->clusterName = ClickHouseSql::nonEmpty($cluster, 'cluster name');
+
         return $this;
     }
 }

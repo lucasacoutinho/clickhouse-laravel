@@ -3,6 +3,7 @@
 namespace ClickHouse\Laravel\Query\Grammars;
 
 use ClickHouse\Laravel\Exceptions\ClickHouseGrammarException;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder;
 
 /**
@@ -14,6 +15,18 @@ use Illuminate\Database\Query\Builder;
  */
 trait CompilesClickHouseJoin
 {
+    /**
+     * @param list<array{
+     *     strict: string,
+     *     type: string,
+     *     global: bool,
+     *     alias: string|null,
+     *     using: list<string>|null,
+     *     on: list<array{0: Expression|string, 1: string, 2: Expression|string}>|null,
+     *     subquery: string|null,
+     *     table: string|null
+     * }> $joins
+     */
     protected function compileClickhousejoin(Builder $query, array $joins): string
     {
         if (empty($joins)) {
@@ -23,7 +36,7 @@ trait CompilesClickHouseJoin
         $clauses = [];
 
         foreach ($joins as $join) {
-            if ($join['using'] && $join['on']) {
+            if ($join['using'] !== null && $join['on'] !== null) {
                 throw ClickHouseGrammarException::ambiguousJoinKeys();
             }
 
@@ -33,32 +46,42 @@ trait CompilesClickHouseJoin
                 $parts[] = 'GLOBAL';
             }
 
-            $parts[] = $join['strict'];
+            if ($join['type'] !== 'CROSS') {
+                $parts[] = $join['strict'];
+            }
             $parts[] = $join['type'];
             $parts[] = 'JOIN';
 
-            if ($join['subquery'] instanceof Builder) {
-                $parts[] = '(' . $join['subquery']->toSql() . ')';
-                $query->addBinding($join['subquery']->getBindings(), 'join');
+            if (is_string($join['subquery'])) {
+                $parts[] = '('.$join['subquery'].')';
             } else {
+                if ($join['table'] === null) {
+                    throw ClickHouseGrammarException::missingJoinKeys();
+                }
+
                 $parts[] = $this->wrapTable($join['table']);
             }
 
-            if ($join['alias']) {
+            if ($join['alias'] !== null) {
                 $parts[] = 'AS';
                 $parts[] = $this->wrap($join['alias']);
             }
 
-            if ($join['using']) {
-                $using = implode(', ', array_map([$this, 'wrap'], $join['using']));
+            if ($join['using'] !== null) {
+                $using = implode(', ', array_map(
+                    fn (string $column): string => $this->wrap($column),
+                    $join['using'],
+                ));
                 $parts[] = "USING ({$using})";
-            } elseif ($join['on']) {
+            } elseif ($join['on'] !== null) {
                 $conditions = [];
                 foreach ($join['on'] as $condition) {
                     [$left, $operator, $right] = $condition;
-                    $conditions[] = $this->wrap($left) . " {$operator} " . $this->wrap($right);
+                    $conditions[] = $this->wrap($left)
+                        .' '.strtoupper($operator).' '
+                        .$this->wrap($right);
                 }
-                $parts[] = 'ON ' . implode(' AND ', $conditions);
+                $parts[] = 'ON '.implode(' AND ', $conditions);
             }
 
             $clauses[] = implode(' ', $parts);
