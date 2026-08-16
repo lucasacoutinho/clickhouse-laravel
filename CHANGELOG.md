@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Require matching 1.3.x releases of `ext-clickhouse` and
+  `ext-pdo_clickhouse`.
+- Run native integration CI and the benchmark fixture against the v1.3.0
+  drivers.
+- Rework the README around a shorter install path and explicit native version
+  pairing.
+
 ## [1.0.0] - 2026-07-26
 
 ### Added

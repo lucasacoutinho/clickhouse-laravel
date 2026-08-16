@@ -9,7 +9,7 @@ trait HasFormat
     public ?string $outputFormat = null;
 
     /**
-     * FORMAT — specify the output format for the query.
+     * FORMAT sets the query output format.
      *
      * Usage:
      *   ->format('JSONEachRow')

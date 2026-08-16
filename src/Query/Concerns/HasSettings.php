@@ -10,7 +10,7 @@ trait HasSettings
     public array $querySettings = [];
 
     /**
-     * SETTINGS — per-query ClickHouse settings appended to the SQL.
+     * SETTINGS appends per-query ClickHouse settings to the SQL.
      *
      * Usage:
      *   ->settings(['max_threads' => 4, 'max_memory_usage' => 10000000000])
@@ -63,8 +63,8 @@ trait HasSettings
     }
 
     /**
-     * Enable async insert — ClickHouse buffers inserts and flushes in batches.
-     * Dramatically improves throughput for high-frequency small inserts.
+     * Enable async insert so ClickHouse buffers inserts and flushes them in batches.
+     * This reduces round trips for frequent small inserts.
      *
      * @param  bool  $wait  Wait for the async insert to be flushed before returning.
      */

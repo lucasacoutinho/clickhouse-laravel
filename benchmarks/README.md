@@ -9,6 +9,9 @@ ClickHouse 26.6.2.81 container and one-million-row dataset. The client image is
 shared, so the PHP build, operating system, CPU allocation, and Docker network
 are identical. Each workload is warmed before its measured samples.
 
+The current native fixture uses `clickhouse` and `pdo_clickhouse` v1.3.0. The
+reference result below records its original v1.2.0 run for historical accuracy.
+
 Run it from the repository root:
 
 ```bash

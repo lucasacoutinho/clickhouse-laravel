@@ -7,7 +7,7 @@ use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Expression as QueryExpression;
 
 /**
- * WITH FILL — fill gaps in time series and ordered sequences.
+ * WITH FILL fills gaps in time series and ordered sequences.
  *
  * Three ways to use:
  *   ->withFill(from: DB::raw("toDateTime64('...', 3)"), step: DB::raw("toIntervalMinute(5)"))
@@ -133,7 +133,7 @@ trait HasWithFill
     }
 
     /**
-     * INTERPOLATE — specify how to compute values for filled-in rows.
+     * INTERPOLATE specifies how to compute values for filled-in rows.
      *
      * Usage:
      *   ->interpolate('cumulative')                    // INTERPOLATE (cumulative)

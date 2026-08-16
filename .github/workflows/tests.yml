@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NATIVE_EXTENSION_VERSION: 1.3.0
+
 jobs:
   quality:
     name: Code quality
@@ -151,9 +154,9 @@ jobs:
 
       - name: Clone released extensions
         run: |
-          git clone --branch v1.2.0 --depth 1 --recurse-submodules \
+          git clone --branch "v${NATIVE_EXTENSION_VERSION}" --depth 1 --recurse-submodules \
             https://github.com/lucasacoutinho/ext-clickhouse.git /tmp/build/ext-clickhouse
-          git clone --branch v1.2.0 --depth 1 \
+          git clone --branch "v${NATIVE_EXTENSION_VERSION}" --depth 1 \
             https://github.com/lucasacoutinho/ext-clickhouse-pdo.git /tmp/build/ext-clickhouse-pdo
 
       - name: Cache compiled extensions
@@ -161,7 +164,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /tmp/ext-compiled
-          key: clickhouse-extensions-v1.2.0-php8.5-${{ runner.os }}-${{ runner.arch }}
+          key: clickhouse-extensions-v${{ env.NATIVE_EXTENSION_VERSION }}-php8.5-${{ runner.os }}-${{ runner.arch }}
 
       - name: Build released extensions
         if: steps.ext-cache.outputs.cache-hit != 'true'
@@ -194,10 +197,11 @@ jobs:
         run: |
           # shellcheck disable=SC2016
           php -r '
+          $expected = getenv("NATIVE_EXTENSION_VERSION");
           foreach (["clickhouse", "pdo_clickhouse"] as $extension) {
               $version = phpversion($extension);
-              if ($version !== "1.2.0") {
-                  throw new RuntimeException("Expected {$extension} 1.2.0, got {$version}");
+              if ($version !== $expected) {
+                  throw new RuntimeException("Expected {$extension} {$expected}, got {$version}");
               }
           }
           if (!in_array("clickhouse", PDO::getAvailableDrivers(), true)) {

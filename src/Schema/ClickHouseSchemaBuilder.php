@@ -56,7 +56,7 @@ class ClickHouseSchemaBuilder extends Builder
             return false;
         }
 
-        // Handle both object and array results — grab the first column value
+        // Handle object and array results by reading the first column value.
         $row = (array) $result;
 
         $value = reset($row);
