@@ -7,7 +7,7 @@ trait HasFinal
     public bool $useFinal = false;
 
     /**
-     * FINAL — deduplicate rows in ReplacingMergeTree.
+     * FINAL deduplicates rows in ReplacingMergeTree.
      */
     public function final(bool $enable = true): static
     {

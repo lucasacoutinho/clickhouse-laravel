@@ -5,7 +5,7 @@ namespace ClickHouse\Laravel\Query;
 /**
  * Common ClickHouse server settings.
  *
- * Not exhaustive — ClickHouse has 600+ settings that change every release.
+ * This list is not exhaustive. ClickHouse has more than 600 settings, and they change between releases.
  * These are the most commonly tuned settings for analytics workloads.
  *
  * @see https://clickhouse.com/docs/en/operations/settings/settings

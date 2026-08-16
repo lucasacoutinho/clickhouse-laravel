@@ -232,7 +232,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
             ->where('id', '<=', 5)
             ->get();
 
-        // Each row's tags are exploded — more rows than original
+        // Exploding each row's tags produces more rows than the source table.
         $this->assertGreaterThan(5, count($rows));
     }
 
@@ -265,7 +265,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
             ->limitBy(2, 'user_id')
             ->get();
 
-        // Count rows per user_id — each should have at most 2
+        // Each user_id should have at most two rows.
         $grouped = [];
         foreach ($rows as $row) {
             $grouped[$row->user_id] = ($grouped[$row->user_id] ?? 0) + 1;
@@ -377,7 +377,7 @@ class ClickHouseFeaturesTest extends FeatureTestCase
     {
         $this->seedEvents();
 
-        // max_threads = 1 forces single-threaded execution — should still return results
+        // max_threads = 1 should still return results with single-threaded execution.
         $rows = DB::connection('clickhouse')
             ->table('_test_features')
             ->settings(['max_threads' => 1])

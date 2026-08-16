@@ -5,7 +5,7 @@ namespace ClickHouse\Laravel\Query\Concerns;
 use ClickHouse\Laravel\Support\ClickHouseSql;
 
 /**
- * ON CLUSTER — execute DDL and mutations on a named ClickHouse cluster.
+ * ON CLUSTER runs DDL and mutations on a named ClickHouse cluster.
  *
  * Usage:
  *   ->onCluster('my_cluster')->where('id', 1)->delete()

@@ -5,7 +5,7 @@ namespace ClickHouse\Laravel\Query\Concerns;
 use ClickHouse\Laravel\Support\ClickHouseSql;
 
 /**
- * Remote table functions — query tables on other ClickHouse servers.
+ * Remote table functions query tables on other ClickHouse servers.
  *
  * Usage:
  *   ->fromRemote('ch-replica:9000', 'analytics', 'events', 'default', 'password')

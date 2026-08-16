@@ -1,38 +1,28 @@
-# ClickHouse Laravel
+<div align="center">
+  <h1>ClickHouse Laravel</h1>
+  <p>
+    A Laravel database driver for ClickHouse over native TCP, powered by
+    <a href="https://github.com/lucasacoutinho/ext-clickhouse-pdo">pdo_clickhouse</a>.
+  </p>
+  <p>
+    <a href="https://github.com/lucasacoutinho/clickhouse-laravel/actions/workflows/tests.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/lucasacoutinho/clickhouse-laravel/tests.yml?branch=main&style=for-the-badge&labelColor=000000"></a>
+    <a href="https://packagist.org/packages/lucasacoutinho/clickhouse-laravel"><img alt="Packagist version" src="https://img.shields.io/packagist/v/lucasacoutinho/clickhouse-laravel?style=for-the-badge&labelColor=000000"></a>
+    <a href="#requirements"><img alt="PHP 8.2 or newer" src="https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=for-the-badge&logo=php&logoColor=white&labelColor=000000"></a>
+    <a href="https://github.com/lucasacoutinho/clickhouse-laravel/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/lucasacoutinho/clickhouse-laravel?style=for-the-badge&labelColor=000000"></a>
+  </p>
+</div>
 
-[![Tests](https://github.com/lucasacoutinho/clickhouse-laravel/actions/workflows/tests.yml/badge.svg)](https://github.com/lucasacoutinho/clickhouse-laravel/actions/workflows/tests.yml)
-[![Latest Stable Version](https://img.shields.io/packagist/v/lucasacoutinho/clickhouse-laravel.svg)](https://packagist.org/packages/lucasacoutinho/clickhouse-laravel)
-[![Total Downloads](https://img.shields.io/packagist/dt/lucasacoutinho/clickhouse-laravel.svg)](https://packagist.org/packages/lucasacoutinho/clickhouse-laravel)
-[![License](https://img.shields.io/packagist/l/lucasacoutinho/clickhouse-laravel.svg)](LICENSE)
+## Getting started
 
-A Laravel database driver for ClickHouse over the native TCP protocol. It uses
-[`ext-pdo_clickhouse`](https://github.com/lucasacoutinho/ext-clickhouse-pdo) and
-[`ext-clickhouse`](https://github.com/lucasacoutinho/ext-clickhouse), so Laravel's
-query builder, Eloquent, query logging, bindings, and schema builder run without
-an HTTP or cURL transport.
-
-## Requirements
-
-- PHP 8.2+
-- Laravel 12 or 13
-- `ext-clickhouse` 1.2.0+
-- `ext-pdo_clickhouse` 1.2.0+
-- ClickHouse 26.3+ recommended; CI exercises ClickHouse 26.3 and 26.6
-
-The default native TCP port is `9000`. TLS endpoints, including ClickHouse
-Cloud, commonly use port `9440`.
-
-## Installation
-
-Install the two native extensions first. They are available as
-[PIE](https://github.com/php/pie)-compatible packages:
+Install the matching v1.3 native extensions with
+[PIE](https://github.com/php/pie):
 
 ```bash
-pie install lucasacoutinho/ext-clickhouse
-pie install lucasacoutinho/ext-clickhouse-pdo
+pie install "lucasacoutinho/ext-clickhouse:~1.3.0"
+pie install "lucasacoutinho/ext-clickhouse-pdo:~1.3.0"
 ```
 
-Then install the Laravel integration:
+Install the Laravel package:
 
 ```bash
 composer require lucasacoutinho/clickhouse-laravel
@@ -48,6 +38,25 @@ php artisan vendor:publish --tag=clickhouse-config
 The package registers the configured `clickhouse` connection when the
 application has not already defined a connection with that name. An explicit
 entry in `config/database.php` takes precedence.
+
+Laravel's query builder, Eloquent, query logging, bindings, and schema builder
+all use the native driver. The package does not add an HTTP or cURL transport.
+
+## Requirements
+
+| Component | Supported version |
+| --- | --- |
+| PHP | 8.2 or newer |
+| Laravel | 12 or 13 |
+| `ext-clickhouse` | 1.3.x |
+| `ext-pdo_clickhouse` | 1.3.x |
+| ClickHouse | 26.3 or newer recommended |
+
+The two native extensions share C++ types, so their minor release lines must
+match. CI tests the exact v1.3.0 releases against ClickHouse 26.3 and 26.6.
+
+The default native TCP port is `9000`. TLS endpoints, including ClickHouse
+Cloud, commonly use port `9440`.
 
 ## Configuration
 

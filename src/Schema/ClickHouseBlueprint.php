@@ -279,7 +279,7 @@ class ClickHouseBlueprint extends Blueprint
     }
 
     /**
-     * LowCardinality(String) column — efficient for low-cardinality string columns.
+     * Add a LowCardinality(String) column for low-cardinality string values.
      */
     public function lowCardinalityString(string $column): ClickHouseColumnDefinition
     {
@@ -331,7 +331,7 @@ class ClickHouseBlueprint extends Blueprint
     }
 
     /**
-     * Raw ClickHouse type — pass any type string directly.
+     * Pass any raw ClickHouse type string directly.
      *
      * Usage:
      *   $table->clickhouseType('tags', 'Array(String)');

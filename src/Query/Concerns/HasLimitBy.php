@@ -10,7 +10,7 @@ trait HasLimitBy
     public array $limitByColumns = [];
 
     /**
-     * LIMIT BY — return top N rows per group.
+     * LIMIT BY returns the top N rows per group.
      *
      * Usage:
      *   ->limitBy(1, 'user_id')              // LIMIT 1 BY `user_id`

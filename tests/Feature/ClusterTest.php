@@ -195,7 +195,7 @@ class ClusterTest extends FeatureTestCase
 
     public function test_both_nodes_independent(): void
     {
-        // Write directly to each node — verify they're separate instances
+        // Write directly to each node to verify that they are separate instances.
         $this->node1()->table('_test_cluster')->insert([['id' => 1, 'name' => 'node1_only']]);
         $this->node2()->table('_test_cluster')->insert([['id' => 2, 'name' => 'node2_only']]);
 

@@ -10,7 +10,7 @@ trait HasArrayJoin
     public array $arrayJoins = [];
 
     /**
-     * ARRAY JOIN — explode an array/map column into rows.
+     * ARRAY JOIN explodes an array or map column into rows.
      *
      * Usage:
      *   ->arrayJoin('tags')                         // ARRAY JOIN `tags`
@@ -47,7 +47,7 @@ trait HasArrayJoin
     }
 
     /**
-     * LEFT ARRAY JOIN — keeps rows with empty arrays.
+     * LEFT ARRAY JOIN keeps rows with empty arrays.
      */
     public function leftArrayJoin(string $column, ?string $alias = null): static
     {

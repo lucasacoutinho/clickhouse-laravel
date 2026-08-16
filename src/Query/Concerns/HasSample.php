@@ -11,7 +11,7 @@ trait HasSample
     public ?string $sampleOffsetClause = null;
 
     /**
-     * SAMPLE — approximate query on a fraction of data.
+     * SAMPLE runs an approximate query on a fraction of the data.
      */
     public function sample(float|int $value, float|int|null $offset = null): static
     {

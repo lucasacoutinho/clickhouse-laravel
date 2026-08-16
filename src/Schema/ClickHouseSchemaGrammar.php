@@ -280,7 +280,7 @@ class ClickHouseSchemaGrammar extends Grammar
     }
 
     /**
-     * Raw ClickHouse type — passes through any type string verbatim.
+     * Pass through any raw ClickHouse type string verbatim.
      */
     protected function typeClickhouseRaw(ClickHouseColumnDefinition $column): string
     {

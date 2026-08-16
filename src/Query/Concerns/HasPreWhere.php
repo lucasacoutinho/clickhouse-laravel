@@ -19,8 +19,8 @@ trait HasPreWhere
     public array $preWheres = [];
 
     /**
-     * PREWHERE — filter rows before reading all columns from disk.
-     * Significantly faster than WHERE for selective filters on wide tables.
+     * PREWHERE filters rows before reading all selected columns from disk.
+     * This can reduce reads for selective filters on wide tables.
      *
      * Usage:
      *   ->preWhere('date', '>=', '2026-01-01')
