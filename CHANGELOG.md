@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-16
+
 ### Changed
 
 - Require matching 1.3.x releases of `ext-clickhouse` and
@@ -105,5 +107,6 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/lucasacoutinho/clickhouse-laravel/releases/tag/v1.0.0
