@@ -105,8 +105,8 @@ serialized result byte budget:
 'max_buffered_bytes' => 67_108_864,
 ```
 
-Both values must be positive integers. Leaving them unset delegates to the
-native driver's defaults of 1,000,000 rows and 64 MiB. These limits apply to
+Both values are nullable positive integers. Leaving them unset or `null` uses
+the native driver's defaults of 1,000,000 rows and 64 MiB. These limits apply to
 the buffered result and are separate from pagination; the byte limit is not a
 hard ceiling on the PHP process's total resident memory. The driver raises an
 error when a result exceeds either configured limit.

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-12
+
+### Fixed
+
+- Allow nullable buffer limits in connection configuration and use ordinary
+  optional environment entries in the published config. Unset or `null` limits
+  use the PDO defaults.
+
 ## [1.3.0] - 2026-09-12
 
 ### Added
@@ -129,7 +137,8 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.0.0...v1.1.0

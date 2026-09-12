@@ -61,10 +61,12 @@ class ClickHouseConnectorTest extends TestCase
 
     public function test_dsn_without_buffer_limits_delegates_to_driver_defaults(): void
     {
-        $dsn = $this->getDsn([]);
+        foreach ([[], ['max_buffered_rows' => null, 'max_buffered_bytes' => null]] as $config) {
+            $dsn = $this->getDsn($config);
 
-        $this->assertStringNotContainsString('max_buffered_rows', $dsn);
-        $this->assertStringNotContainsString('max_buffered_bytes', $dsn);
+            $this->assertStringNotContainsString('max_buffered_rows', $dsn);
+            $this->assertStringNotContainsString('max_buffered_bytes', $dsn);
+        }
     }
 
     public function test_dsn_with_buffer_limits(): void
@@ -83,7 +85,7 @@ class ClickHouseConnectorTest extends TestCase
     public function test_invalid_buffer_limits_are_rejected(): void
     {
         foreach (['max_buffered_rows', 'max_buffered_bytes'] as $option) {
-            foreach ([0, -1, null, 'not-a-number'] as $value) {
+            foreach ([0, -1, 'not-a-number'] as $value) {
                 try {
                     $this->getDsn([$option => $value]);
                     $this->fail("{$option} accepted invalid value.");
