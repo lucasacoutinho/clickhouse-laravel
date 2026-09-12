@@ -39,7 +39,7 @@ class ClickHouseConnector extends Connector implements ConnectorInterface
         }
 
         foreach (['max_buffered_rows', 'max_buffered_bytes'] as $option) {
-            if (array_key_exists($option, $config)) {
+            if (isset($config[$option])) {
                 $value = $this->integer($config[$option], $option, 1, PHP_INT_MAX);
                 $dsn .= ';'.$option.'='.$value;
             }
