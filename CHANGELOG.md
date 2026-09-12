@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-12
+
+### Changed
+
+- Require matching 1.4.x releases of `ext-clickhouse` and
+  `ext-pdo_clickhouse`, starting at 1.4.1.
+- Run native integration CI against ClickHouse 26.3, 26.6, and 26.8.
+
 ## [1.1.0] - 2026-08-16
 
 ### Changed
@@ -107,6 +115,7 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/lucasacoutinho/clickhouse-laravel/releases/tag/v1.0.0
