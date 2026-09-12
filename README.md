@@ -18,8 +18,8 @@ Install the matching v1.4 native extensions with
 [PIE](https://github.com/php/pie):
 
 ```bash
-pie install "lucasacoutinho/ext-clickhouse:~1.4.1"
-pie install "lucasacoutinho/ext-clickhouse-pdo:~1.4.1"
+pie install "lucasacoutinho/ext-clickhouse:~1.5.0"
+pie install "lucasacoutinho/ext-clickhouse-pdo:~1.5.0"
 ```
 
 Install the Laravel package:
@@ -48,12 +48,12 @@ all use the native driver. The package does not add an HTTP or cURL transport.
 | --- | --- |
 | PHP | 8.2 or newer |
 | Laravel | 12 or 13 |
-| `ext-clickhouse` | 1.4.1 or newer within 1.4.x |
-| `ext-pdo_clickhouse` | 1.4.1 or newer within 1.4.x |
+| `ext-clickhouse` | 1.5.0 or newer within 1.5.x |
+| `ext-pdo_clickhouse` | 1.5.0 or newer within 1.5.x |
 | ClickHouse | 26.3 or newer recommended |
 
 The two native extensions share C++ types, so their minor release lines must
-match. CI tests the exact v1.4.1 releases against ClickHouse 26.3, 26.6, and
+match. CI tests the exact v1.5.0 releases against ClickHouse 26.3, 26.6, and
 26.8.
 
 The default native TCP port is `9000`. TLS endpoints, including ClickHouse
@@ -73,6 +73,9 @@ CLICKHOUSE_PASSWORD=
 CLICKHOUSE_COMPRESSION=lz4
 CLICKHOUSE_TIMEOUT=5
 CLICKHOUSE_PERSISTENT=false
+# Optional; omit both to use the native driver's defaults.
+# CLICKHOUSE_MAX_BUFFERED_ROWS=
+# CLICKHOUSE_MAX_BUFFERED_BYTES=
 
 CLICKHOUSE_SSL=false
 CLICKHOUSE_SSL_SKIP_VERIFY=false
@@ -91,6 +94,22 @@ CLICKHOUSE_TRANSACTIONS=throw
 `compression` accepts `lz4`, `zstd`, `none`, or a blank value. Numeric PDO
 attributes can be supplied through `options`; the connector always enables
 exception mode.
+
+SELECT results are buffered by the native PDO driver before Laravel fetches
+them. Set `max_buffered_rows` and `max_buffered_bytes` in the connection
+configuration to reject results that exceed the configured row count or
+serialized result byte budget:
+
+```php
+'max_buffered_rows' => 1_000_000,
+'max_buffered_bytes' => 67_108_864,
+```
+
+Both values must be positive integers. Leaving them unset delegates to the
+native driver's defaults of 1,000,000 rows and 64 MiB. These limits apply to
+the buffered result and are separate from pagination; the byte limit is not a
+hard ceiling on the PHP process's total resident memory. The driver raises an
+error when a result exceeds either configured limit.
 
 ### TLS and mutual TLS
 

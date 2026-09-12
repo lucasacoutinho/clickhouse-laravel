@@ -2,7 +2,7 @@
 
 FROM composer:2 AS composer
 
-FROM ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.4.1
+FROM ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.5.0
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 
