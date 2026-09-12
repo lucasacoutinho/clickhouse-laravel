@@ -59,6 +59,41 @@ class ClickHouseConnectorTest extends TestCase
         $this->assertStringNotContainsString('compression', $dsn);
     }
 
+    public function test_dsn_without_buffer_limits_delegates_to_driver_defaults(): void
+    {
+        $dsn = $this->getDsn([]);
+
+        $this->assertStringNotContainsString('max_buffered_rows', $dsn);
+        $this->assertStringNotContainsString('max_buffered_bytes', $dsn);
+    }
+
+    public function test_dsn_with_buffer_limits(): void
+    {
+        $dsn = $this->getDsn([
+            'max_buffered_rows' => '10000',
+            'max_buffered_bytes' => '67108864',
+        ]);
+
+        $this->assertSame(
+            'clickhouse:host=localhost;port=9000;dbname=default;max_buffered_rows=10000;max_buffered_bytes=67108864',
+            $dsn,
+        );
+    }
+
+    public function test_invalid_buffer_limits_are_rejected(): void
+    {
+        foreach (['max_buffered_rows', 'max_buffered_bytes'] as $option) {
+            foreach ([0, -1, null, 'not-a-number'] as $value) {
+                try {
+                    $this->getDsn([$option => $value]);
+                    $this->fail("{$option} accepted invalid value.");
+                } catch (\InvalidArgumentException $exception) {
+                    $this->assertStringContainsString($option, $exception->getMessage());
+                }
+            }
+        }
+    }
+
     public function test_blank_compression_is_treated_as_unconfigured(): void
     {
         $dsn = $this->getDsn(['compression' => '   ']);
@@ -188,6 +223,45 @@ class ClickHouseConnectorTest extends TestCase
                 ['host' => 'node-two', 'port' => 9000],
             ],
         ]);
+    }
+
+    public function test_cluster_nodes_inherit_buffer_limits_from_base_config(): void
+    {
+        $pdo = $this->createStub(\PDO::class);
+        $connector = new class($pdo) extends ClickHouseConnector
+        {
+            /** @var array<string, mixed>|null */
+            public ?array $leafConfig = null;
+
+            public function __construct(private \PDO $pdo) {}
+
+            public function connect(array $config): \PDO
+            {
+                if (isset($config['cluster'])) {
+                    return parent::connect($config);
+                }
+
+                $this->leafConfig = $config;
+
+                return $this->pdo;
+            }
+        };
+
+        $connector->connect([
+            'max_buffered_rows' => 10000,
+            'max_buffered_bytes' => 67108864,
+            'cluster' => [
+                ['host' => 'node-one', 'port' => 9000],
+            ],
+        ]);
+
+        $this->assertNotNull($connector->leafConfig);
+        $this->assertSame(10000, $connector->leafConfig['max_buffered_rows']);
+        $this->assertSame(67108864, $connector->leafConfig['max_buffered_bytes']);
+        $this->assertSame(
+            'clickhouse:host=node-one;port=9000;dbname=default;max_buffered_rows=10000;max_buffered_bytes=67108864',
+            $this->getDsn($connector->leafConfig),
+        );
     }
 
     public function test_dsn_without_ssl_has_no_param(): void

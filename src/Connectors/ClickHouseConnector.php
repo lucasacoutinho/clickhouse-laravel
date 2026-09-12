@@ -38,6 +38,13 @@ class ClickHouseConnector extends Connector implements ConnectorInterface
             $dsn .= ';compression='.$compression;
         }
 
+        foreach (['max_buffered_rows', 'max_buffered_bytes'] as $option) {
+            if (array_key_exists($option, $config)) {
+                $value = $this->integer($config[$option], $option, 1, PHP_INT_MAX);
+                $dsn .= ';'.$option.'='.$value;
+            }
+        }
+
         $tlsOptions = [
             'ca_path' => $config['ssl_ca_path'] ?? $config['ca_path'] ?? null,
             'ca_file' => $config['ssl_ca_file'] ?? $config['ca_file'] ?? null,

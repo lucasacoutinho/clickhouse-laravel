@@ -1,5 +1,11 @@
 <?php
 
+$missingEnvironmentValue = new stdClass;
+$optionalBufferLimits = array_filter([
+    'max_buffered_rows' => env('CLICKHOUSE_MAX_BUFFERED_ROWS', $missingEnvironmentValue),
+    'max_buffered_bytes' => env('CLICKHOUSE_MAX_BUFFERED_BYTES', $missingEnvironmentValue),
+], static fn (mixed $value): bool => $value !== $missingEnvironmentValue);
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -23,6 +29,8 @@ return [
     'compression' => env('CLICKHOUSE_COMPRESSION'),
     'timeout' => env('CLICKHOUSE_TIMEOUT', 5),
     'persistent' => env('CLICKHOUSE_PERSISTENT', false),
+
+    ...$optionalBufferLimits,
 
     'ssl' => env('CLICKHOUSE_SSL', false),
     'ssl_skip_verify' => env('CLICKHOUSE_SSL_SKIP_VERIFY', false),
