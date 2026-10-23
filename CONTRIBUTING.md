@@ -4,7 +4,7 @@
 
 - PHP 8.2 or newer
 - Composer 2
-- `ext-clickhouse` and `ext-pdo_clickhouse` 1.2.0 or newer
+- `ext-clickhouse` and `ext-pdo_clickhouse` 1.6.0 or newer within 1.6.x
 - Two ClickHouse instances for cluster integration tests
 
 Install dependencies:
@@ -47,4 +47,5 @@ Use `composer format` to apply the repository's Pint rules.
   documenting the resulting delivery semantics.
 - Keep the README and changelog aligned with public behavior.
 
-CI checks PHP 8.2 through 8.5, Laravel 12 and 13, and ClickHouse 26.3 and 26.6.
+CI checks PHP 8.2 through 8.5, Laravel 12 and 13, and ClickHouse 26.3, 26.6,
+and 26.8.

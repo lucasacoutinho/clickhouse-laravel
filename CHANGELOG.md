@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-23
+
+### Changed
+
+- Require matching 1.6.x releases of `ext-clickhouse` and
+  `ext-pdo_clickhouse`, including fixes for idle handshakes, premature socket
+  EOF, compressed block validation, array element types, and DateTime timezones.
+
 ## [1.3.1] - 2026-09-12
 
 ### Fixed
@@ -137,7 +145,8 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.1.0...v1.2.0
