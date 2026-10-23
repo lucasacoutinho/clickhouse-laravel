@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  NATIVE_EXTENSION_VERSION: 1.5.0
+  NATIVE_EXTENSION_VERSION: 1.6.0
 
 jobs:
   quality:

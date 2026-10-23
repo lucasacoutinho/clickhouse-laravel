@@ -25,7 +25,6 @@ class ClickHouseSchemaGrammar extends Grammar
      * @param  Fluent<array-key, mixed>  $command
      *
      * @psalm-suppress MixedAssignment Table setting values are validated by ClickHouseSql::literal.
-     * @psalm-suppress RedundantConditionGivenDocblockType Laravel's engine property is unset until configured.
      */
     public function compileCreate(Blueprint $blueprint, Fluent $command): string
     {

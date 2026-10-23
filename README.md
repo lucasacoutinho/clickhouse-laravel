@@ -14,12 +14,12 @@
 
 ## Getting started
 
-Install the matching v1.4 native extensions with
+Install the matching v1.6 native extensions with
 [PIE](https://github.com/php/pie):
 
 ```bash
-pie install "lucasacoutinho/ext-clickhouse:~1.5.0"
-pie install "lucasacoutinho/ext-clickhouse-pdo:~1.5.0"
+pie install "lucasacoutinho/ext-clickhouse:~1.6.0"
+pie install "lucasacoutinho/ext-clickhouse-pdo:~1.6.0"
 ```
 
 Install the Laravel package:
@@ -48,12 +48,12 @@ all use the native driver. The package does not add an HTTP or cURL transport.
 | --- | --- |
 | PHP | 8.2 or newer |
 | Laravel | 12 or 13 |
-| `ext-clickhouse` | 1.5.0 or newer within 1.5.x |
-| `ext-pdo_clickhouse` | 1.5.0 or newer within 1.5.x |
+| `ext-clickhouse` | 1.6.0 or newer within 1.6.x |
+| `ext-pdo_clickhouse` | 1.6.0 or newer within 1.6.x |
 | ClickHouse | 26.3 or newer recommended |
 
 The two native extensions share C++ types, so their minor release lines must
-match. CI tests the exact v1.5.0 releases against ClickHouse 26.3, 26.6, and
+match. CI tests the exact v1.6.0 releases against ClickHouse 26.3, 26.6, and
 26.8.
 
 The default native TCP port is `9000`. TLS endpoints, including ClickHouse
