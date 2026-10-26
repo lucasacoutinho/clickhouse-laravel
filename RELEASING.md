@@ -1,7 +1,7 @@
 # Releasing
 
-Releases are created by the repository's gated `Release` workflow. Do not push
-release tags manually.
+Releases are published by the `Release` workflow when a stable `vX.Y.Z` tag is
+pushed. The workflow does not create tags.
 
 ## Prepare
 
@@ -13,8 +13,25 @@ release tags manually.
 
 ## Publish
 
-Run the `Release` workflow from `main` and enter the version without a `v`
-prefix. For example:
+Push an annotated tag for that release commit. The tag must be a stable semver
+with a `v` prefix, and the commit must be on `main`:
+
+```bash
+git switch main
+git pull
+git tag --annotate v1.1.0 --message "Release v1.1.0"
+git push origin v1.1.0
+```
+
+The tag push runs `Release`. It derives the version by stripping the leading
+`v`, checks that the tag is `vX.Y.Z`, that the tagged commit is on the default
+branch, and that `CHANGELOG.md` contains `## [X.Y.Z] - `. It then reruns the
+complete PHP, Laravel, and ClickHouse test matrix, builds a Composer archive
+and SHA-256 checksum, and publishes the GitHub release for the existing tag.
+
+`workflow_dispatch` is only a fallback to publish again when the tag already
+exists and points at the current default-branch commit. It does not create a
+tag. If the tag is missing, push `vX.Y.Z` (or run `gh release create`) first:
 
 ```bash
 gh workflow run release.yml \
@@ -22,10 +39,6 @@ gh workflow run release.yml \
     --ref main \
     --field version=1.1.0
 ```
-
-The workflow validates the version and changelog, reruns the complete PHP,
-Laravel, and ClickHouse test matrix, creates an annotated `vX.Y.Z` tag, builds
-a Composer archive and SHA-256 checksum, and publishes the GitHub release.
 
 Packagist is connected to the GitHub repository and imports semantic tags after
 they are pushed. Verify the new version at
