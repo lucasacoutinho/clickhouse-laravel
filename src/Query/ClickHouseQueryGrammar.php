@@ -232,6 +232,8 @@ class ClickHouseQueryGrammar extends Grammar
      * has no plain literal, or when a raw expression makes the placeholders ambiguous.
      *
      * @param  array<array-key, mixed>  $bindings
+     *
+     * @psalm-suppress MixedAssignment Bindings are encoded by insertLiteral().
      */
     public function inlineInsertBindings(string $sql, array $bindings): ?string
     {

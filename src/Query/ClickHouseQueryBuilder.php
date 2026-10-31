@@ -155,22 +155,27 @@ class ClickHouseQueryBuilder extends Builder
             return true;
         }
 
-        if (! is_array(reset($values))) {
-            $values = [$values];
-        } else {
-            foreach ($values as $key => $value) {
-                ksort($value);
-                $values[$key] = $value;
-            }
+        /** @var list<array<array-key, mixed>>|array<array-key, array<array-key, mixed>> $rows */
+        $rows = is_array(reset($values)) ? $values : [$values];
+
+        foreach ($rows as $key => $row) {
+            ksort($row);
+            $rows[$key] = $row;
         }
 
         $this->applyBeforeQueryCallbacks();
 
-        $sql = $this->grammar->compileInsert($this, $values);
+        $grammar = $this->grammar;
+
+        if (! $grammar instanceof ClickHouseQueryGrammar) {
+            throw new \LogicException('ClickHouse inserts require ClickHouseQueryGrammar.');
+        }
+
+        $sql = $grammar->compileInsert($this, $rows);
         $bindings = $this->connection->prepareBindings(
-            $this->cleanBindings(Arr::flatten($values, 1))
+            $this->cleanBindings(Arr::flatten($rows, 1))
         );
-        $inlined = $this->grammar->inlineInsertBindings($sql, $bindings);
+        $inlined = $grammar->inlineInsertBindings($sql, $bindings);
 
         return $inlined === null
             ? $this->connection->insert($sql, $bindings)
