@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Send Query Builder inserts as SQL literals instead of emulated bindings. Floats
+  no longer force ClickHouse off its fast `VALUES` parser, and each row no longer
+  costs a client binding. Query listeners receive inserts with the values in the
+  SQL and an empty bindings array.
+
 ## [1.4.1] - 2026-10-31
 
 ### Changed
