@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-31
+
+### Changed
+
+- Test against the 1.6.1 releases of `ext-clickhouse` and `ext-pdo_clickhouse`,
+  which reject malformed and excessively nested type names, read ProfileInfo
+  flags as bytes, and report the failing CA path when TLS setup cannot load it.
+- Move the benchmark fixtures to Laravel 13.39.0, because Composer refuses
+  13.22.0 under its security advisory, and disable async inserts on the
+  benchmark server so insert results measure the client.
+
+### Added
+
+- Add a framework-free driver benchmark covering `ext-clickhouse`,
+  `pdo_clickhouse`, `smi2/phpclickhouse`, `lizhichao/one-ck`, and `pdo_mysql`.
+
 ## [1.4.0] - 2026-10-23
 
 ### Changed
@@ -145,7 +161,8 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.2.0...v1.3.0

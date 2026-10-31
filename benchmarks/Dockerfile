@@ -1,14 +1,17 @@
 # syntax=docker/dockerfile:1
 
+ARG BENCHMARK_BASE_IMAGE=ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.1
+
 FROM composer:2 AS composer
 
-FROM ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.0
+FROM ${BENCHMARK_BASE_IMAGE}
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends unzip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && docker-php-ext-install bcmath pdo_mysql
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1
@@ -31,6 +34,16 @@ RUN composer install \
 WORKDIR /opt/http
 
 COPY benchmarks/composer.http.json composer.json
+
+RUN composer install \
+        --classmap-authoritative \
+        --no-dev \
+        --no-progress \
+        --prefer-dist
+
+WORKDIR /opt/drivers
+
+COPY benchmarks/composer.drivers.json composer.json
 
 RUN composer install \
         --classmap-authoritative \
