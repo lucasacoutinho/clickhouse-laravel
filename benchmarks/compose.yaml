@@ -4,6 +4,8 @@ services:
     environment:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
       CLICKHOUSE_PASSWORD: ""
+    volumes:
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/benchmark.xml:ro
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 2s
@@ -15,6 +17,8 @@ services:
     build:
       context: ..
       dockerfile: benchmarks/Dockerfile
+      args:
+        BENCHMARK_BASE_IMAGE: ${BENCHMARK_BASE_IMAGE:-ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.1}
     depends_on:
       clickhouse:
         condition: service_healthy

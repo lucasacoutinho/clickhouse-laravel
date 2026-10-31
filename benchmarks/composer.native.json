@@ -16,7 +16,7 @@
     ],
     "require": {
         "php": "^8.5",
-        "laravel/framework": "13.22.0",
+        "laravel/framework": "13.39.0",
         "lucasacoutinho/clickhouse-laravel": "dev-main"
     },
     "config": {

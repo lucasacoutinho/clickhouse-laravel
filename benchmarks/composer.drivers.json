@@ -1,0 +1,13 @@
+{
+    "name": "lucasacoutinho/clickhouse-drivers-benchmark",
+    "description": "Isolated fixture for the framework-free PHP ClickHouse driver comparison",
+    "type": "project",
+    "require": {
+        "php": "^8.5",
+        "lizhichao/one-ck": "0.2.9",
+        "smi2/phpclickhouse": "1.26.925"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
