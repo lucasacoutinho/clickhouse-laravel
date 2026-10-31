@@ -36,7 +36,7 @@ row is fully materialized as a PHP array.
 
 This run was captured on October 31, 2026, using an AMD Ryzen 9 9900X under WSL2
 with PHP 8.5.12 and five rounds per driver. `ext-clickhouse` and
-`pdo_clickhouse` were local builds of 1.6.1 plus the connect and materialization
+`pdo_clickhouse` were local builds matching 1.6.2 connect and materialization
 changes. The machine was under heavy load from other containers. Values are the
 median of the per-round medians in milliseconds, and the multiple is relative to
 `ext-clickhouse`.
@@ -104,7 +104,7 @@ claim.
 This run was captured on October 31, 2026, using an AMD Ryzen 9 9900X under WSL2
 and heavy load from other containers. The clients used PHP 8.5.12 and Laravel
 13.39.0. The native side used this package with literal inserts and local builds
-of 1.6.1 plus the connect and materialization changes; the HTTP side used
+with the 1.6.2 connect changes; the HTTP side used
 `laravel-clickhouse/laravel-clickhouse` 1.1.3. Each cell shows the native-first
 and HTTP-first medians, so the difference between them is a guide to the noise.
 

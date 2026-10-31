@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG BENCHMARK_BASE_IMAGE=ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.1
+ARG BENCHMARK_BASE_IMAGE=ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.2
 
 FROM composer:2 AS composer
 

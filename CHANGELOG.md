@@ -4,8 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-31
+
 ### Changed
 
+- Test against the 1.6.2 releases of `ext-clickhouse` and `ext-pdo_clickhouse`,
+  which connect faster and convert results and insert columns with less CPU.
 - Send Query Builder inserts as SQL literals instead of emulated bindings. Floats
   no longer force ClickHouse off its fast `VALUES` parser, and each row no longer
   costs a client binding. Query listeners receive inserts with the values in the
@@ -168,7 +172,8 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.0...v1.3.1
