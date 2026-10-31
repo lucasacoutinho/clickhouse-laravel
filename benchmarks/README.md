@@ -36,31 +36,34 @@ row is fully materialized as a PHP array.
 
 This run was captured on October 31, 2026, using an AMD Ryzen 9 9900X under WSL2
 with PHP 8.5.12 and five rounds per driver. `ext-clickhouse` and
-`pdo_clickhouse` were local 1.6.1 builds. The machine was running other
-containers. Values are the median of the per-round medians in milliseconds, and
-the multiple is relative to `ext-clickhouse`.
+`pdo_clickhouse` were local builds of 1.6.1 plus the connect and materialization
+changes. The machine was under heavy load from other containers. Values are the
+median of the per-round medians in milliseconds, and the multiple is relative to
+`ext-clickhouse`.
 
-| Workload | `ext-clickhouse` 1.6.1 | `pdo_clickhouse` 1.6.1 | `one-ck` 0.2.9 | `smi2/phpclickhouse` 1.26.925 | `pdo_mysql` (port 9004) |
+| Workload | `ext-clickhouse` | `pdo_clickhouse` | `one-ck` 0.2.9 | `smi2/phpclickhouse` 1.26.925 | `pdo_mysql` (port 9004) |
 |---|---:|---:|---:|---:|---:|
-| Cold connect + SELECT 1 | 2.853 | 2.877 (1.01×) | 1.969 (0.69×) | 2.582 (0.90×) | 1.646 (0.58×) |
-| Reused SELECT 1 | 1.139 | 1.094 (0.96×) | 0.966 (0.85×) | 2.619 (2.30×) | 0.683 (0.60×) |
-| Indexed point lookup | 2.250 | 2.019 (0.90×) | 2.106 (0.94×) | 3.556 (1.58×) | 1.503 (0.67×) |
-| Aggregate 1M rows | 7.945 | 7.207 (0.91×) | 7.278 (0.92×) | 8.207 (1.03×) | 6.814 (0.86×) |
-| Fetch 1,000 rows | 4.366 | 3.849 (0.88×) | 3.760 (0.86×) | 6.423 (1.47×) | 4.083 (0.94×) |
-| Fetch 100,000 rows | 33.649 | 24.179 (0.72×) | 66.952 (1.99×) | 124.9 (3.71×) | 54.552 (1.62×) |
-| Insert 100 rows | 1.589 | 1.312 (0.83×) | 1.423 (0.90×) | 2.561 (1.61×) | 1.077 (0.68×) |
-| Insert 10,000 rows | 7.354 | 5.408 (0.74×) | 6.315 (0.86×) | 15.509 (2.11×) | 4.301 (0.58×) |
-| Peak process RSS | 93.7 MiB | 91.4 MiB | 83.8 MiB | 163.5 MiB | 89.8 MiB |
+| Cold connect + SELECT 1 | 3.057 | 3.175 (1.04×) | 3.212 (1.05×) | 4.351 (1.42×) | 2.221 (0.73×) |
+| Reused SELECT 1 | 1.695 | 1.872 (1.10×) | 1.421 (0.84×) | 3.864 (2.28×) | 0.865 (0.51×) |
+| Indexed point lookup | 3.191 | 3.491 (1.09×) | 2.985 (0.94×) | 6.577 (2.06×) | 2.108 (0.66×) |
+| Aggregate 1M rows | 11.065 | 11.847 (1.07×) | 12.130 (1.10×) | 14.236 (1.29×) | 10.282 (0.93×) |
+| Fetch 1,000 rows | 5.845 | 5.972 (1.02×) | 5.962 (1.02×) | 10.186 (1.74×) | 6.190 (1.06×) |
+| Fetch 100,000 rows | 26.135 | 30.223 (1.16×) | 106.7 (4.08×) | 164.4 (6.29×) | 88.093 (3.37×) |
+| Insert 100 rows | 1.737 | 1.881 (1.08×) | 2.150 (1.24×) | 3.691 (2.12×) | 1.704 (0.98×) |
+| Insert 10,000 rows | 7.610 | 7.858 (1.03×) | 13.132 (1.73×) | 24.534 (3.22×) | 6.820 (0.90×) |
+| Peak process RSS | 80.7 MiB | 91.5 MiB | 83.7 MiB | 163.1 MiB | 89.5 MiB |
 
-Median spread between rounds was 27% of the median, and the largest was 62%. Do
-not read small differences as real. The gaps that held in every round were:
+Median spread between rounds was 57% of the median, so do not read small
+differences as real, and do not compare these absolute times with earlier runs.
 
-- Fetching 100,000 rows, where both native extensions beat every other driver.
-- `smi2/phpclickhouse` trailing on every workload except the aggregate and cold
-  connect. It also exceeds PHP's default 128 MB limit when fetching 100,000
-  rows, so the driver benchmark sets `memory_limit=-1`.
-- `pdo_mysql` leading reused `SELECT 1`, and beating both native extensions on
-  cold connect.
+`pdo_mysql` still leads reused `SELECT 1` and point lookups. About 85% of a reused
+native `SELECT 1` is spent waiting on the server, which writes several packets per
+query where the MySQL handler writes one. A client cannot remove that wait.
+
+The server also sends a `ProfileEvents` block that these drivers discard. Setting
+`send_profile_events=0` in a server profile saved about 7% on reused `SELECT 1` in
+an interleaved test. Drivers cannot default it per query, because the server
+rejects that setting for `readonly` users.
 
 <!-- DRIVER_RESULTS_END -->
 
@@ -98,24 +101,24 @@ claim.
 
 <!-- BENCHMARK_RESULTS_START -->
 
-This run was captured on October 31, 2026, using an AMD Ryzen 9 9900X under WSL2.
-The clients used PHP 8.5.12 and Laravel 13.39.0. The native side used local
-`clickhouse` and `pdo_clickhouse` 1.6.1 builds; the HTTP side used
+This run was captured on October 31, 2026, using an AMD Ryzen 9 9900X under WSL2
+and heavy load from other containers. The clients used PHP 8.5.12 and Laravel
+13.39.0. The native side used this package with literal inserts and local builds
+of 1.6.1 plus the connect and materialization changes; the HTTP side used
 `laravel-clickhouse/laravel-clickhouse` 1.1.3. Each cell shows the native-first
 and HTTP-first medians, so the difference between them is a guide to the noise.
 
 | Workload | Native median (ms) | HTTP median (ms) |
 |---|---:|---:|
-| Cold connect + SELECT 1 | 2.652 / 2.800 | 2.683 / 2.961 |
-| Reused connection SELECT 1 | 1.153 / 1.114 | 2.457 / 2.575 |
-| Indexed point lookup | 2.445 / 2.236 | 3.383 / 4.052 |
-| Aggregate 1M rows | 7.605 / 7.030 | 8.045 / 8.685 |
-| Fetch 1,000 rows | 4.449 / 4.212 | 5.639 / 7.410 |
-| Insert 100 rows | 3.614 / 3.508 | 2.281 / 2.802 |
+| Cold connect + SELECT 1 | 3.646 / 3.317 | 5.707 / 5.510 |
+| Reused connection SELECT 1 | 1.963 / 2.040 | 7.817 / 6.314 |
+| Indexed point lookup | 4.356 / 4.958 | 15.378 / 10.222 |
+| Aggregate 1M rows | 20.537 / 19.492 | 30.640 / 21.147 |
+| Fetch 1,000 rows | 9.281 / 9.426 | 16.930 / 16.256 |
+| Insert 100 rows | 3.154 / 2.684 | 9.548 / 6.622 |
 
-Native leads on small queries over an open connection. With async inserts off,
-the HTTP package leads the 100-row Query Builder insert in both orders. Earlier
-published results showed that insert as a tie because of the async insert wait.
+Native leads every workload in both orders. Earlier published results showed the
+insert as a tie because of the async insert wait.
 
 Lower is better.
 
