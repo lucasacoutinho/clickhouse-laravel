@@ -20,6 +20,7 @@ use ClickHouse\Laravel\Query\Concerns\HasWithFill;
 use DateTimeInterface;
 use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use UnitEnum;
 
@@ -140,6 +141,45 @@ class ClickHouseQueryBuilder extends Builder
         );
 
         return $this;
+    }
+
+    /**
+     * Send plain values as SQL literals. PDO emulation would quote floats, which pushes the server
+     * from its fast VALUES parser to evaluating expressions, and adds a client cost per binding.
+     *
+     * @param  array<array-key, mixed>  $values
+     */
+    public function insert(array $values): bool
+    {
+        if (empty($values)) {
+            return true;
+        }
+
+        /** @var list<array<array-key, mixed>>|array<array-key, array<array-key, mixed>> $rows */
+        $rows = is_array(reset($values)) ? $values : [$values];
+
+        foreach ($rows as $key => $row) {
+            ksort($row);
+            $rows[$key] = $row;
+        }
+
+        $this->applyBeforeQueryCallbacks();
+
+        $grammar = $this->grammar;
+
+        if (! $grammar instanceof ClickHouseQueryGrammar) {
+            throw new \LogicException('ClickHouse inserts require ClickHouseQueryGrammar.');
+        }
+
+        $sql = $grammar->compileInsert($this, $rows);
+        $bindings = $this->connection->prepareBindings(
+            $this->cleanBindings(Arr::flatten($rows, 1))
+        );
+        $inlined = $grammar->inlineInsertBindings($sql, $bindings);
+
+        return $inlined === null
+            ? $this->connection->insert($sql, $bindings)
+            : $this->connection->insert($inlined);
     }
 
     /**

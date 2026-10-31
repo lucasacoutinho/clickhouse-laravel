@@ -73,6 +73,92 @@ class QueryTest extends FeatureTestCase
         $this->assertEquals(100, DB::connection('clickhouse')->table('_test_events')->count());
     }
 
+    public function test_insert_literals_round_trip_across_column_types(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $connection->statement('DROP TABLE IF EXISTS _test_literals');
+
+        try {
+            $connection->statement(<<<'SQL'
+                CREATE TABLE _test_literals (
+                    id UInt64,
+                    as_string String,
+                    as_decimal Decimal(18, 4),
+                    as_nullable Nullable(Float64),
+                    as_float Float64,
+                    as_bool Bool,
+                    as_date DateTime
+                ) ENGINE = MergeTree() ORDER BY id
+            SQL);
+
+            $text = "it's a \\ back?slash \n values (?) \u{1F600}";
+            $connection->table('_test_literals')->insert([
+                [
+                    'id' => 1,
+                    'as_string' => 0.5,
+                    'as_decimal' => 1.25,
+                    'as_nullable' => null,
+                    'as_float' => 1.0E+25,
+                    'as_bool' => true,
+                    'as_date' => new \DateTimeImmutable('2026-10-31 12:00:00'),
+                ],
+                [
+                    'id' => 2,
+                    'as_string' => $text,
+                    'as_decimal' => -3,
+                    'as_nullable' => -0.1,
+                    'as_float' => INF,
+                    'as_bool' => false,
+                    'as_date' => '2026-01-02 03:04:05',
+                ],
+                [
+                    'id' => 3,
+                    'as_string' => '',
+                    'as_decimal' => 0.0,
+                    'as_nullable' => 2.5,
+                    'as_float' => NAN,
+                    'as_bool' => true,
+                    'as_date' => '2026-01-02 03:04:05',
+                ],
+            ]);
+
+            $rows = array_map(static fn (object $row): array => (array) $row, $connection->select(<<<'SQL'
+                SELECT id, as_string, toString(as_decimal) AS as_decimal, as_nullable, as_float,
+                       as_bool, toString(as_date) AS as_date
+                FROM _test_literals ORDER BY id
+            SQL));
+
+            $this->assertSame('0.5', (string) $rows[0]['as_string']);
+            $this->assertSame('1.25', $rows[0]['as_decimal']);
+            $this->assertNull($rows[0]['as_nullable']);
+            $this->assertSame(1.0E+25, $rows[0]['as_float']);
+            $this->assertTrue((bool) $rows[0]['as_bool']);
+            $this->assertSame('2026-10-31 12:00:00', $rows[0]['as_date']);
+            $this->assertSame($text, $rows[1]['as_string']);
+            $this->assertSame('-3', $rows[1]['as_decimal']);
+            $this->assertSame(-0.1, $rows[1]['as_nullable']);
+            $this->assertSame(INF, $rows[1]['as_float']);
+            $this->assertTrue(is_nan($rows[2]['as_float']));
+        } finally {
+            $connection->statement('DROP TABLE IF EXISTS _test_literals');
+        }
+    }
+
+    public function test_insert_falls_back_when_a_raw_expression_contains_a_placeholder(): void
+    {
+        $connection = DB::connection('clickhouse');
+
+        $connection->table('_test_events')->insert([
+            'id' => 90,
+            'user_id' => 1,
+            'event' => DB::raw("concat('a?', 'b')"),
+            'tags' => ClickHouseValue::array([]),
+            'score' => 0.5,
+        ]);
+
+        $this->assertSame('a?b', $connection->table('_test_events')->where('id', 90)->value('event'));
+    }
+
     public function test_insert_complex_native_values(): void
     {
         $connection = DB::connection('clickhouse');

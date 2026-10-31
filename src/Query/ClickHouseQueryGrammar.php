@@ -14,6 +14,7 @@ use ClickHouse\Laravel\Query\Grammars\CompilesPrewhere;
 use ClickHouse\Laravel\Query\Grammars\CompilesSetOperations;
 use ClickHouse\Laravel\Query\Grammars\CompilesSettings;
 use ClickHouse\Laravel\Query\Grammars\CompilesWithFill;
+use ClickHouse\Laravel\Support\ClickHouseSql;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Grammars\Grammar;
 use Illuminate\Support\Arr;
@@ -224,6 +225,59 @@ class ClickHouseQueryGrammar extends Grammar
         }
 
         return $sql;
+    }
+
+    /**
+     * Replace the placeholders of a compiled insert with SQL literals. Returns null when a value
+     * has no plain literal, or when a raw expression makes the placeholders ambiguous.
+     *
+     * @param  array<array-key, mixed>  $bindings
+     *
+     * @psalm-suppress MixedAssignment Bindings are encoded by insertLiteral().
+     */
+    public function inlineInsertBindings(string $sql, array $bindings): ?string
+    {
+        $valuesAt = strripos($sql, ' values ');
+
+        if ($valuesAt === false) {
+            return null;
+        }
+
+        $segments = explode('?', substr($sql, $valuesAt));
+
+        if (count($segments) !== count($bindings) + 1) {
+            return null;
+        }
+
+        $inlined = substr($sql, 0, $valuesAt).$segments[0];
+        $index = 1;
+
+        foreach ($bindings as $binding) {
+            $literal = $this->insertLiteral($binding);
+
+            if ($literal === null) {
+                return null;
+            }
+
+            $inlined .= $literal.$segments[$index++];
+        }
+
+        return $inlined;
+    }
+
+    private function insertLiteral(mixed $value): ?string
+    {
+        return match (true) {
+            $value === null => 'NULL',
+            is_int($value) => (string) $value,
+            is_float($value) => match (true) {
+                is_nan($value) => 'nan',
+                is_infinite($value) => $value > 0 ? 'inf' : '-inf',
+                default => var_export($value, true),
+            },
+            is_string($value) => ClickHouseSql::quoteString($value),
+            default => null,
+        };
     }
 
     /**
