@@ -7,6 +7,21 @@ use ClickHouse\Laravel\Tests\TestCase;
 
 class ClickHouseSqlTest extends TestCase
 {
+    public function test_quote_identifier_escapes_backslashes_and_backticks(): void
+    {
+        $this->assertSame('`events`', ClickHouseSql::quoteIdentifier('events'));
+        $this->assertSame('`a\\`b`', ClickHouseSql::quoteIdentifier('a`b'));
+        $this->assertSame('`c\\\\d`', ClickHouseSql::quoteIdentifier('c\\d'));
+        $this->assertSame('`name\\\\`', ClickHouseSql::quoteIdentifier('name\\'));
+        $this->assertSame('`x\\\\\\`y`', ClickHouseSql::quoteIdentifier('x\\`y'));
+        $this->assertSame(
+            '`x\\\\\\` FROM (SELECT secret "x\\\\x60" FROM poc_secrets) --`',
+            ClickHouseSql::wrapIdentifier(
+                'x\\` FROM (SELECT secret "x\\x60" FROM poc_secrets) --',
+            ),
+        );
+    }
+
     public function test_quote_string_escapes_quotes_backslashes_and_control_bytes(): void
     {
         $this->assertSame(

@@ -489,6 +489,24 @@ class ClickHouseQueryGrammarTest extends TestCase
         $this->assertStringContainsString('`user_id`', $sql);
     }
 
+    public function test_hostile_identifiers_escape_backslashes_and_backticks(): void
+    {
+        $column = 'x\\` FROM (SELECT secret "x\\x60" FROM poc_secrets) --';
+
+        $this->assertSame(
+            'select `x\\\\\\` FROM (SELECT secret "x\\\\x60" FROM poc_secrets) --` from `poc_events`',
+            $this->toSql($this->builder('poc_events')->select([$column])),
+        );
+        $this->assertSame(
+            'select `a\\`b`, `c\\\\d` from `events` order by `a\\`b\\\\c` asc',
+            $this->toSql($this->builder()->select('a`b', 'c\\d')->orderBy('a`b\\c')),
+        );
+        $this->assertSame(
+            'select * from `poc\\`events\\\\x`',
+            $this->toSql($this->builder('poc`events\\x')),
+        );
+    }
+
     public function test_wrap_value_star(): void
     {
         $sql = $this->toSql($this->builder()->select('*'));

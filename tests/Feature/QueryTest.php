@@ -4,6 +4,7 @@ namespace ClickHouse\Laravel\Tests\Feature;
 
 use ClickHouse\Laravel\Exceptions\ClickHouseGrammarException;
 use ClickHouse\Laravel\Support\ClickHouseValue;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Group;
 
@@ -476,5 +477,66 @@ class QueryTest extends FeatureTestCase
         );
 
         $this->assertSame(2, $count);
+    }
+
+    public function test_backtick_and_backslash_identifiers_round_trip(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $connection->statement('DROP TABLE IF EXISTS _test_ident');
+        $connection->statement(
+            'CREATE TABLE _test_ident (`a\\`b` String, `c\\\\d` String) ENGINE = Memory',
+        );
+
+        try {
+            $connection->statement(
+                "INSERT INTO _test_ident (`a\\`b`, `c\\\\d`) VALUES ('left', 'right')",
+            );
+
+            $row = $connection->table('_test_ident')->select('a`b', 'c\\d')->orderBy('a`b')->first();
+
+            $this->assertNotNull($row);
+            $this->assertSame('left', $row->{'a`b'});
+            $this->assertSame('right', $row->{'c\\d'});
+        } finally {
+            $connection->statement('DROP TABLE IF EXISTS _test_ident');
+        }
+    }
+
+    public function test_hostile_identifier_cannot_escape_its_backtick_quotes(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $connection->statement('DROP TABLE IF EXISTS _test_ident_events');
+        $connection->statement('DROP TABLE IF EXISTS _test_ident_secrets');
+        $connection->statement(
+            'CREATE TABLE _test_ident_events (id UInt64, tenant String) ENGINE = Memory',
+        );
+        $connection->statement(
+            'CREATE TABLE _test_ident_secrets (secret String) ENGINE = Memory',
+        );
+
+        try {
+            $connection->statement("INSERT INTO _test_ident_events VALUES (1, 'a')");
+            $connection->statement("INSERT INTO _test_ident_secrets VALUES ('TOP-SECRET')");
+
+            $column = 'x\\` FROM (SELECT secret "x\\x60" FROM _test_ident_secrets) --';
+
+            try {
+                $rows = $connection->table('_test_ident_events')->select([$column])->get()->all();
+                $this->fail('A hostile identifier should be rejected. Got: '.json_encode($rows));
+            } catch (QueryException $exception) {
+                $this->assertMatchesRegularExpression(
+                    '/Unknown expression identifier|UNKNOWN_IDENTIFIER/',
+                    $exception->getMessage(),
+                );
+                $this->assertStringNotContainsString('TOP-SECRET', $exception->getMessage());
+                $this->assertStringNotContainsString('TOP-SECRET', (string) json_encode($exception->errorInfo));
+            }
+
+            $secret = $connection->table('_test_ident_secrets')->value('secret');
+            $this->assertSame('TOP-SECRET', $secret);
+        } finally {
+            $connection->statement('DROP TABLE IF EXISTS _test_ident_events');
+            $connection->statement('DROP TABLE IF EXISTS _test_ident_secrets');
+        }
     }
 }

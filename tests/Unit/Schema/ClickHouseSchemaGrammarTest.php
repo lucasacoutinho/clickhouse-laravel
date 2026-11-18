@@ -575,6 +575,18 @@ class ClickHouseSchemaGrammarTest extends TestCase
         $this->assertStringContainsString('`user_name`', $sql);
     }
 
+    public function test_wrap_value_escapes_backslashes_and_backticks(): void
+    {
+        $bp = $this->blueprint();
+        $bp->string('a`b');
+        $bp->string('c\\d');
+        $sql = $this->compileCreate($bp);
+
+        $this->assertStringContainsString('`a\\`b` String', $sql);
+        $this->assertStringContainsString('`c\\\\d` String', $sql);
+        $this->assertStringNotContainsString('`a``b`', $sql);
+    }
+
     public function test_create_on_cluster(): void
     {
         $bp = $this->blueprint();

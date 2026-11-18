@@ -606,7 +606,7 @@ class ClickHouseSchemaGrammar extends Grammar
             return $value;
         }
 
-        return '`'.str_replace('`', '``', $value).'`';
+        return ClickHouseSql::wrapIdentifier($value);
     }
 
     /** @psalm-suppress MixedAssignment Fluent attributes are validated before compilation. */

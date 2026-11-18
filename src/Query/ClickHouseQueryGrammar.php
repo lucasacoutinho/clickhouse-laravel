@@ -146,7 +146,7 @@ class ClickHouseQueryGrammar extends Grammar
             return $value;
         }
 
-        return '`'.str_replace('`', '``', $value).'`';
+        return ClickHouseSql::wrapIdentifier($value);
     }
 
     /**

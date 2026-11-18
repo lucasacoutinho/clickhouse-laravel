@@ -28,7 +28,23 @@ final class ClickHouseSql
             throw new InvalidArgumentException("Invalid ClickHouse {$label}: control characters are not allowed.");
         }
 
-        return '`'.str_replace('`', '``', $value).'`';
+        return self::wrapIdentifier($value);
+    }
+
+    /**
+     * Backtick-quote an identifier.
+     *
+     * ClickHouse uses the string lexer for backtick identifiers, so a
+     * backslash is an escape. Escaping only the backtick (by doubling it)
+     * lets a preceding backslash consume the closer and break out of the
+     * identifier. Both characters are escaped: `\` as `\\` and `` ` `` as `\``.
+     */
+    public static function wrapIdentifier(string $value): string
+    {
+        return '`'.strtr($value, [
+            '\\' => '\\\\',
+            '`' => '\\`',
+        ]).'`';
     }
 
     public static function quoteString(string $value): string
