@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Escape backslashes and backticks in ClickHouse identifiers. Doubling
+  backticks alone lets a preceding backslash end the identifier early.
+- Redact `remote()` passwords in query exceptions and logged SQL.
+- Pin GitHub Actions to commit SHAs, disable persisted checkout credentials,
+  and declare least-privilege permissions on each workflow job.
+
 ## [1.4.2] - 2026-10-31
 
 ### Changed

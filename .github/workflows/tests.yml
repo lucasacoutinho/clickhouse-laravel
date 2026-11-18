@@ -16,12 +16,16 @@ jobs:
   quality:
     name: Code quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
         with:
           php-version: '8.3'
           coverage: none
@@ -46,6 +50,8 @@ jobs:
   unit:
     name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     strategy:
       fail-fast: false
@@ -68,10 +74,12 @@ jobs:
             testbench: '11.*'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
         with:
           php-version: ${{ matrix.php }}
           extensions: pdo
@@ -100,6 +108,8 @@ jobs:
     name: ClickHouse ${{ matrix.clickhouse }} / PHP 8.5 / Laravel 13
     runs-on: ubuntu-latest
     needs: [quality, unit]
+    permissions:
+      contents: read
 
     strategy:
       fail-fast: false
@@ -133,10 +143,12 @@ jobs:
           --health-retries 20
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
         with:
           php-version: '8.5'
           extensions: pdo
@@ -161,7 +173,7 @@ jobs:
 
       - name: Cache compiled extensions
         id: ext-cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/ext-compiled
           key: clickhouse-extensions-v${{ env.NATIVE_EXTENSION_VERSION }}-php8.5-${{ runner.os }}-${{ runner.arch }}
