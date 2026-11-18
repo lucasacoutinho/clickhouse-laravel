@@ -145,4 +145,37 @@ class ConnectionTest extends FeatureTestCase
     {
         $this->assertSame(0, DB::connection('clickhouse')->transactionLevel());
     }
+
+    public function test_remote_password_is_redacted_from_errors_and_the_query_log(): void
+    {
+        $connection = DB::connection('clickhouse');
+        $password = 'S3cr3t-Remote-Pw';
+        $connection->flushQueryLog();
+        $connection->enableQueryLog();
+
+        $rows = $connection->query()
+            ->fromRemote('127.0.0.1:9000', 'system', 'one', 'default', $password)
+            ->get();
+
+        $this->assertCount(1, $rows);
+        $logged = (string) json_encode($connection->getQueryLog());
+        $this->assertStringNotContainsString($password, $logged);
+        $this->assertStringContainsString('[redacted]', $logged);
+
+        try {
+            $connection->query()
+                ->fromRemote('127.0.0.1:9000', 'default', 'no_such_table', 'reporting', $password)
+                ->get();
+            $this->fail('The missing remote table should raise a query exception.');
+        } catch (QueryException $exception) {
+            $previous = $exception->getPrevious();
+
+            $this->assertStringNotContainsString($password, $exception->getMessage());
+            $this->assertStringNotContainsString($password, $exception->getSql());
+            $this->assertStringContainsString("'[redacted]'", $exception->getMessage());
+            $this->assertStringContainsString('no_such_table', $exception->getMessage());
+            $this->assertNotNull($previous);
+            $this->assertStringNotContainsString($password, $previous->getMessage());
+        }
+    }
 }

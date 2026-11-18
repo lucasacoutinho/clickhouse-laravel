@@ -8,8 +8,12 @@ use ClickHouse\Laravel\Query\ClickHouseQueryBuilder;
 use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaBuilder;
 use ClickHouse\Laravel\Schema\ClickHouseSchemaGrammar;
+use ClickHouse\Laravel\Support\ClickHouseSql;
 use ClickHouse\Laravel\Tests\TestCase;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
 use PDO;
+use PDOException;
 use PDOStatement;
 
 class ClickHouseConnectionTest extends TestCase
@@ -254,5 +258,95 @@ class ClickHouseConnectionTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->connection(['retry_writes' => 'sometimes']);
+    }
+
+    public function test_remote_password_stays_in_executable_sql_but_not_in_logs(): void
+    {
+        $connection = $this->clickhouse();
+        $password = "p'ass\\word";
+        $quoted = ClickHouseSql::quoteString($password);
+        $builder = $connection->query()->fromRemote(
+            'ch-replica:9000',
+            'analytics',
+            'events',
+            'reporting',
+            $password,
+        );
+
+        $this->assertStringContainsString($quoted, $builder->toSql());
+
+        $seen = null;
+        $connection->listen(function (QueryExecuted $event) use (&$seen): void {
+            $seen = $event->sql;
+        });
+        $log = $connection->pretend(function () use ($connection, $password): void {
+            $connection->query()->fromRemote(
+                'ch-replica:9000',
+                'analytics',
+                'events',
+                'reporting',
+                $password,
+            )->get();
+        });
+
+        $this->assertStringContainsString("'[redacted]'", $log[0]['query']);
+        $this->assertStringNotContainsString($quoted, $log[0]['query']);
+        $this->assertStringNotContainsString("p'ass", $log[0]['query']);
+        $this->assertIsString($seen);
+        $this->assertStringNotContainsString($quoted, $seen);
+        $this->assertStringContainsString('remote(', $log[0]['query']);
+    }
+
+    public function test_empty_remote_password_is_not_treated_as_a_secret(): void
+    {
+        $connection = $this->connection();
+        $log = $connection->pretend(function () use ($connection): void {
+            $connection->query()->fromRemote('ch-replica:9000', 'analytics', 'events')->get();
+        });
+
+        $this->assertStringContainsString(", '')", $log[0]['query']);
+        $this->assertStringNotContainsString('[redacted]', $log[0]['query']);
+    }
+
+    public function test_remote_password_is_redacted_from_query_exceptions(): void
+    {
+        $password = 'S3cr3t-Remote-Pw';
+        $quoted = ClickHouseSql::quoteString($password);
+        $failure = new PDOException(
+            "DB::Exception: Table default.no_such_table does not exist (query: remote({$quoted}))",
+        );
+        $failure->errorInfo = ['HY000', 60, "remote({$quoted})"];
+        $statement = $this->createStub(PDOStatement::class);
+        $statement->method('execute')->willThrowException($failure);
+        $pdo = $this->createStub(PDO::class);
+        $pdo->method('prepare')->willReturn($statement);
+        $connection = new ClickHouseConnection($pdo, 'default', '', [
+            'host' => '127.0.0.1',
+            'port' => 9000,
+            'database' => 'default',
+        ]);
+
+        try {
+            $connection->query()->fromRemote(
+                '127.0.0.1:9000',
+                'default',
+                'no_such_table',
+                'reporting',
+                $password,
+            )->get();
+            $this->fail('The missing remote table should raise a query exception.');
+        } catch (QueryException $exception) {
+            $previous = $exception->getPrevious();
+
+            $this->assertStringNotContainsString($password, $exception->getMessage());
+            $this->assertStringNotContainsString($password, $exception->getSql());
+            $this->assertStringContainsString("'[redacted]'", $exception->getMessage());
+            $this->assertStringContainsString("'[redacted]'", $exception->getSql());
+            $this->assertStringContainsString('no_such_table', $exception->getSql());
+            $this->assertNotNull($previous);
+            $this->assertStringNotContainsString($password, $previous->getMessage());
+            $this->assertIsArray($exception->errorInfo);
+            $this->assertStringNotContainsString($password, (string) json_encode($exception->errorInfo));
+        }
     }
 }

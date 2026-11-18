@@ -16,6 +16,7 @@ use Illuminate\Database\QueryException;
 use PDO;
 use PDOException;
 use ReflectionClass;
+use ReflectionProperty;
 use Throwable;
 use WeakMap;
 
@@ -32,6 +33,13 @@ class ClickHouseConnection extends Connection
 
     /** @var WeakMap<PDO, bool>|null */
     protected ?WeakMap $settingsAppliedPdos = null;
+
+    /**
+     * Quoted SQL literals that must not appear in exceptions or logs.
+     *
+     * @var array<string, true>
+     */
+    private array $sensitiveSqlLiterals = [];
 
     /**
      * @param  (Closure(): PDO)|PDO  $pdo
@@ -234,6 +242,46 @@ class ClickHouseConnection extends Connection
         $this->cluster?->disconnect();
         $this->resetSettingsState();
         parent::disconnect();
+    }
+
+    /**
+     * Remember a quoted literal, such as a remote() password, so later
+     * exceptions and query logs can be recorded without it.
+     */
+    public function registerSensitiveSqlLiteral(string $literal): void
+    {
+        if ($literal === '' || $literal === "''") {
+            return;
+        }
+
+        $this->sensitiveSqlLiterals[$literal] = true;
+    }
+
+    /**
+     * @param  string  $query
+     * @param  array<array-key, mixed>  $bindings
+     * @param  float|null  $time
+     */
+    public function logQuery($query, $bindings, $time = null)
+    {
+        parent::logQuery(
+            $this->redactSensitiveSql($query),
+            $this->redactSensitiveBindings($bindings),
+            $time,
+        );
+    }
+
+    /**
+     * @param  string  $query
+     * @param  array<array-key, mixed>  $bindings
+     */
+    protected function runQueryCallback($query, $bindings, Closure $callback)
+    {
+        try {
+            return parent::runQueryCallback($query, $bindings, $callback);
+        } catch (QueryException $exception) {
+            throw $this->redactQueryException($exception);
+        }
     }
 
     /**
@@ -457,6 +505,82 @@ class ClickHouseConnection extends Connection
                 'ClickHouse transactions must be configured as "throw" or "passthrough".'
             );
         }
+    }
+
+    private function redactQueryException(QueryException $exception): QueryException
+    {
+        $current = $exception;
+        $seen = [];
+
+        while ($current instanceof Throwable && ! isset($seen[spl_object_id($current)])) {
+            $seen[spl_object_id($current)] = true;
+            $this->redactThrowable($current);
+            $current = $current->getPrevious();
+        }
+
+        (new ReflectionProperty(QueryException::class, 'sql'))->setValue(
+            $exception,
+            $this->redactSensitiveSql($exception->getSql()),
+        );
+        (new ReflectionProperty(QueryException::class, 'bindings'))->setValue(
+            $exception,
+            $this->redactSensitiveBindings($exception->getBindings()),
+        );
+
+        return $exception;
+    }
+
+    private function redactThrowable(Throwable $throwable): void
+    {
+        $message = $this->redactSensitiveSql($throwable->getMessage());
+
+        if ($message !== $throwable->getMessage()) {
+            (new ReflectionProperty($throwable, 'message'))->setValue($throwable, $message);
+        }
+
+        if (! $throwable instanceof PDOException || ! is_array($throwable->errorInfo)) {
+            return;
+        }
+
+        $errorInfo = $throwable->errorInfo;
+
+        foreach (array_keys($errorInfo) as $index) {
+            if (is_string($errorInfo[$index])) {
+                $errorInfo[$index] = $this->redactSensitiveSql($errorInfo[$index]);
+            }
+        }
+
+        $throwable->errorInfo = $errorInfo;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $bindings
+     * @return array<array-key, mixed>
+     */
+    private function redactSensitiveBindings(array $bindings): array
+    {
+        foreach (array_keys($bindings) as $key) {
+            if (is_string($bindings[$key])) {
+                $bindings[$key] = $this->redactSensitiveSql($bindings[$key]);
+            }
+        }
+
+        return $bindings;
+    }
+
+    private function redactSensitiveSql(string $sql): string
+    {
+        if ($this->sensitiveSqlLiterals === []) {
+            return $sql;
+        }
+
+        $literals = array_keys($this->sensitiveSqlLiterals);
+        usort(
+            $literals,
+            static fn (string $left, string $right): int => strlen($right) <=> strlen($left),
+        );
+
+        return str_replace($literals, "'[redacted]'", $sql);
     }
 
     private function integerConfig(string $key, int $default): int

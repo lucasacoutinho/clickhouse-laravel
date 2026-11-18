@@ -2,6 +2,7 @@
 
 namespace ClickHouse\Laravel\Query\Concerns;
 
+use ClickHouse\Laravel\ClickHouseConnection;
 use ClickHouse\Laravel\Support\ClickHouseSql;
 
 /**
@@ -23,10 +24,18 @@ trait HasRemote
         ClickHouseSql::nonEmpty($table, 'remote table');
         ClickHouseSql::nonEmpty($user, 'remote user');
 
-        $arguments = array_map(
-            ClickHouseSql::quoteString(...),
-            [$address, $database, $table, $user, $password],
-        );
+        $quotedPassword = ClickHouseSql::quoteString($password);
+        $arguments = [
+            ClickHouseSql::quoteString($address),
+            ClickHouseSql::quoteString($database),
+            ClickHouseSql::quoteString($table),
+            ClickHouseSql::quoteString($user),
+            $quotedPassword,
+        ];
+
+        if ($password !== '' && $this->connection instanceof ClickHouseConnection) {
+            $this->connection->registerSensitiveSqlLiteral($quotedPassword);
+        }
 
         $expression = 'remote('.implode(', ', $arguments).')';
 
