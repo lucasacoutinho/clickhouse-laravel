@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-26
+
+### Changed
+
+- Support PHP 8.6 with the paired 1.6.3 native and PDO extensions.
+- Compile bulk inserts of strings, numbers and nulls in one pass when the rows
+  have matching columns.
+
 ## [1.4.2] - 2026-10-31
 
 ### Changed
@@ -172,7 +180,8 @@ All notable changes to this project will be documented in this file.
 - Cluster writes are no longer fanned out by the Laravel client.
 - `ClickHouseModel` no longer disables Laravel mass-assignment protection.
 
-[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.3...HEAD
+[1.4.3]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/lucasacoutinho/clickhouse-laravel/compare/v1.3.1...v1.4.0

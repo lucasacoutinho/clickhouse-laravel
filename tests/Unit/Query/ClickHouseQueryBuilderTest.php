@@ -3,7 +3,9 @@
 namespace ClickHouse\Laravel\Tests\Unit\Query;
 
 use ClickHouse\Laravel\Query\ClickHouseQueryBuilder;
+use ClickHouse\Laravel\Query\ClickHouseQueryGrammar;
 use ClickHouse\Laravel\Tests\TestCase;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Expression;
 
 class ClickHouseQueryBuilderTest extends TestCase
@@ -405,6 +407,85 @@ class ClickHouseQueryBuilderTest extends TestCase
             ->format('JSON')
             ->settings(['max_threads' => 4]);
         $this->assertSame($b, $result);
+    }
+
+    public function test_insert_literals_preserve_sorted_columns_callbacks_and_query_log(): void
+    {
+        $builder = $this->builder()->from('original');
+        $calls = 0;
+        $builder->beforeQuery(function ($query) use (&$calls): void {
+            $calls++;
+            $query->from('events?')->settings(['max_threads' => 2]);
+        });
+
+        $log = $this->clickhouse()->pretend(fn () => $builder->insert([
+            ['name?' => "O'Reilly\\x", 'id' => 1, 'value' => 1.5],
+            ['value' => null, 'id' => 2, 'name?' => 'second?'],
+        ]));
+
+        $this->assertSame(1, $calls);
+        $this->assertCount(1, $log);
+        $this->assertSame(
+            "insert into `events?` (`id`, `name?`, `value`) SETTINGS max_threads = 2 values (1, 'O\\'Reilly\\\\x', 1.5), (2, 'second?', NULL)",
+            $log[0]['query'],
+        );
+        $this->assertSame([], $log[0]['bindings']);
+    }
+
+    public function test_literal_insert_aligns_rows_with_settings_and_quoted_values(): void
+    {
+        $query = $this->builder()->from('events?')->settings(['max_threads' => 2]);
+        $log = $this->clickhouse()->pretend(fn () => $query->insert([
+            ['value' => -1.25, 'id' => 1, 'text' => "a\0b"],
+            ['text' => '?', 'value' => null, 'id' => 2],
+        ]));
+
+        $this->assertSame("insert into `events?` (`id`, `text`, `value`) SETTINGS max_threads = 2 values (1, 'a\\x00b', -1.25), (2, '?', NULL)", $log[0]['query']);
+        $this->assertSame([], $log[0]['bindings']);
+    }
+
+    public function test_insert_falls_back_for_expressions_with_placeholders(): void
+    {
+        $connection = $this->clickhouse();
+        $connection->beforeExecuting(function (string $sql, array $bindings): void {
+            $this->assertSame('insert into `events` (`a`, `b`) values (?, if(?, 2, 3)), (?, ?)', $sql);
+            $this->assertSame([1, 0, 5], $bindings);
+        });
+        $connection->pretend(fn () => $this->builder()->from('events')->insert([
+            ['b' => new Expression('if(?, 2, 3)'), 'a' => true],
+            ['c' => 5, 'a' => false],
+        ]));
+    }
+
+    public function test_insert_preserves_positional_order_for_different_row_keys(): void
+    {
+        $log = $this->clickhouse()->pretend(fn () => $this->builder()->from('events')->insert([
+            ['b' => 2, 'a' => 1],
+            ['c' => 4, 'a' => 3],
+        ]));
+
+        $this->assertSame('insert into `events` (`a`, `b`) values (1, 2), (3, 4)', $log[0]['query']);
+    }
+
+    public function test_insert_uses_overridden_grammar_compiler(): void
+    {
+        $connection = $this->clickhouse();
+        $original = $connection->getQueryGrammar();
+        $grammar = new class($connection) extends ClickHouseQueryGrammar
+        {
+            public function compileInsert(Builder $query, array $values): string
+            {
+                return parent::compileInsert($query, $values).' /* custom */';
+            }
+        };
+
+        try {
+            $connection->setQueryGrammar($grammar);
+            $log = $connection->pretend(fn () => $this->builder()->from('events')->insert(['id' => 7]));
+            $this->assertSame('insert into `events` (`id`) values (7) /* custom */', $log[0]['query']);
+        } finally {
+            $connection->setQueryGrammar($original);
+        }
     }
 
     public function test_insert_chunked_empty_returns_true(): void

@@ -53,8 +53,8 @@ all use the native driver. The package does not add an HTTP or cURL transport.
 | ClickHouse | 26.3 or newer recommended |
 
 The two native extensions share C++ types, so their minor release lines must
-match. CI tests the exact v1.6.2 releases against ClickHouse 26.3, 26.6, and
-26.8.
+match. PHP 8.6 requires version 1.6.3 or newer of both extensions.
+Integration CI pins the pair to v1.6.3 and covers ClickHouse 26.3, 26.6, and 26.8.
 
 The default native TCP port is `9000`. TLS endpoints, including ClickHouse
 Cloud, commonly use port `9440`.

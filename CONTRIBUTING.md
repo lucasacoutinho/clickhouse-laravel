@@ -47,5 +47,5 @@ Use `composer format` to apply the repository's Pint rules.
   documenting the resulting delivery semantics.
 - Keep the README and changelog aligned with public behavior.
 
-CI checks PHP 8.2 through 8.5, Laravel 12 and 13, and ClickHouse 26.3, 26.6,
+CI checks PHP 8.2 through 8.6, Laravel 12 and 13, and ClickHouse 26.3, 26.6,
 and 26.8.
