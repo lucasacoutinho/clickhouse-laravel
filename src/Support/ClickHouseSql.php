@@ -33,6 +33,10 @@ final class ClickHouseSql
 
     public static function quoteString(string $value): string
     {
+        if (preg_match('/[\'\\\\\x00-\x1F\x7F]/', $value) === 0) {
+            return "'".$value."'";
+        }
+
         $escaped = str_replace(['\\', "'"], ['\\\\', "\\'"], $value);
         $escaped = preg_replace_callback(
             '/[\x00-\x1F\x7F]/',

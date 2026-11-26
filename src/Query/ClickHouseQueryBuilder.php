@@ -158,6 +158,19 @@ class ClickHouseQueryBuilder extends Builder
         /** @var list<array<array-key, mixed>>|array<array-key, array<array-key, mixed>> $rows */
         $rows = is_array(reset($values)) ? $values : [$values];
 
+        // Custom builders, grammars and connections may override how bindings are prepared.
+        if (
+            $this->beforeQueryCallbacks === []
+            && $this::class === self::class
+            && $this->connection::class === ClickHouseConnection::class
+            && $this->grammar::class === ClickHouseQueryGrammar::class
+        ) {
+            $sql = $this->grammar->compileLiteralInsert($this, $rows);
+            if ($sql !== null) {
+                return $this->connection->insert($sql);
+            }
+        }
+
         foreach ($rows as $key => $row) {
             ksort($row);
             $rows[$key] = $row;

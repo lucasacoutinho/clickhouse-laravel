@@ -18,7 +18,7 @@ services:
       context: ..
       dockerfile: benchmarks/Dockerfile
       args:
-        BENCHMARK_BASE_IMAGE: ${BENCHMARK_BASE_IMAGE:-ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.1}
+        BENCHMARK_BASE_IMAGE: ${BENCHMARK_BASE_IMAGE:-ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.3}
     depends_on:
       clickhouse:
         condition: service_healthy

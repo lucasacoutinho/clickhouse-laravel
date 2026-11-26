@@ -228,6 +228,55 @@ class ClickHouseQueryGrammar extends Grammar
     }
 
     /**
+     * @param  array<array-key, mixed>  $rows
+     */
+    public function compileLiteralInsert(ClickHouseQueryBuilder $query, array $rows): ?string
+    {
+        $this->assertInsertIsLocal($query);
+        $first = reset($rows);
+        if (! is_array($first) || $first === []) {
+            return null;
+        }
+
+        ksort($first);
+        $keys = [];
+        foreach (array_keys($first) as $key) {
+            if (! is_string($key) || is_numeric($key)) {
+                return null;
+            }
+            $keys[] = $key;
+        }
+        $tuples = '';
+
+        foreach ($rows as $row) {
+            if (! is_array($row) || count($row) !== count($keys)) {
+                return null;
+            }
+
+            $literals = [];
+            foreach ($keys as $key) {
+                if (! array_key_exists($key, $row)) {
+                    return null;
+                }
+
+                $literal = $this->insertLiteral($row[$key]);
+                if ($literal === null) {
+                    return null;
+                }
+                $literals[] = $literal;
+            }
+            $tuples .= ($tuples === '' ? '(' : ', (').implode(', ', $literals).')';
+        }
+
+        $table = $this->wrapTable($query->from);
+        $columns = $this->columnize($keys);
+        $settings = $this->compileSettings($query, $query->querySettings);
+        $prefix = "insert into {$table} ({$columns})";
+
+        return $prefix.($settings === '' ? '' : ' '.$settings).' values '.$tuples;
+    }
+
+    /**
      * Replace the placeholders of a compiled insert with SQL literals. Returns null when a value
      * has no plain literal, or when a raw expression makes the placeholders ambiguous.
      *

@@ -1,12 +1,14 @@
 # Performance comparison
 
-Two benchmarks live here:
+The benchmark scripts cover the following workloads.
 
 - `run-drivers.sh` compares PHP ClickHouse drivers directly, without a framework.
 - `run.sh` compares this package with `laravel-clickhouse/laravel-clickhouse`
   1.1.3 and its default Guzzle HTTP transport.
+- `client-workloads.php` measures typed reads through each native API and bulk
+  inserts through the Laravel query builder.
 
-Both use one shared client image, so the PHP build, operating system, CPU
+The two comparison scripts use one shared client image, so the PHP build, operating system, CPU
 allocation, and Docker network are identical. Both use the same ClickHouse
 26.6.2.81 container and one-million-row dataset, and warm each workload before
 its measured samples.
@@ -15,6 +17,66 @@ The server runs with `async_insert=0` (`clickhouse-users.xml`). ClickHouse 26.6
 enables async inserts by default, and the server then holds every client insert
 for at least 50 ms. That wait is identical for every driver and hides their
 cost, so it made every insert look like a 60 ms tie.
+
+## Native stack changes, November 26, 2026
+
+Four before-and-after rounds used PHP 8.4.28, Laravel 13.44.1, ClickHouse
+26.6.2.81 and synchronous inserts on local TCP. Each round used the same PHP
+image, server and CPU affinity for both builds. The run order reversed each
+round. The baselines were `3de0edc` for ext-clickhouse, `a583f52` for PDO and
+`5c45349` for Laravel. Each cell gives the median of the four round medians in
+milliseconds, followed by the speedup.
+
+| Workload | ext-clickhouse | PDO | Laravel |
+|---|---:|---:|---:|
+| 16,384 rows with an ID and a Decimal64 | 5.70 → 2.05 (2.78×) | 6.53 → 2.66 (2.46×) | 6.59 → 2.78 (2.37×) |
+| 16,384 invoice lines with subtotal, tax and total | 14.11 → 3.39 (4.17×) | 14.56 → 3.53 (4.13×) | 15.28 → 4.11 (3.72×) |
+| 16,384 rows with 32 UInt32 values each | 8.24 → 5.65 (1.46×) | 7.97 → 5.87 (1.36×) | 8.45 → 6.23 (1.36×) |
+| Query builder insert of 10,000 rows | — | — | 17.56 → 6.91 (2.54×) |
+
+The typed reads time the entire query and fetch. They validate every returned
+value after each sample. The insert uses a temporary Memory table and checks
+the row count, unique IDs and values before truncating it for the next sample.
+Holding both extensions fixed and changing only the Laravel package gave a
+2.46× insert speedup. Holding the native extension fixed and changing only PDO
+gave 1.09–1.16× on a 12-column UInt64 fetch with two different block sizes.
+
+The existing suite, covering connects, point lookups, aggregations, flat rows
+and inserts, measured 0.89–1.07× across the three APIs. For example, Laravel's
+million-row aggregation took 5.74 → 5.73 ms and its cold connect plus `SELECT 1`
+took 1.42 → 1.60 ms. In a separate 12-round alternating run, that cold-connect
+case measured 2.13 → 1.97 ms and a 10,000-row raw PDO insert measured
+6.09 → 6.14 ms.
+
+The same four-round comparison on PHP 8.6.0 ZTS used Laravel 13.44.1 and
+the same server. The original extension release needs two compatibility changes
+to run on PHP 8.6. The baseline included the object-offset and thread-local
+cache fixes. Its C++ dependency, conversion code, PDO cursor and Laravel
+package were the originals.
+
+| Workload on PHP 8.6.0 | ext-clickhouse | PDO | Laravel |
+|---|---:|---:|---:|
+| 16,384 rows with an ID and a Decimal64 | 8.84 → 3.39 (2.61×) | 9.63 → 4.84 (1.99×) | 9.49 → 5.07 (1.87×) |
+| 16,384 invoice lines with subtotal, tax and total | 23.83 → 6.21 (3.84×) | 21.86 → 5.28 (4.14×) | 21.00 → 6.07 (3.46×) |
+| 16,384 rows with 32 UInt32 values each | 12.02 → 8.07 (1.49×) | 11.48 → 7.75 (1.48×) | 11.99 → 9.30 (1.29×) |
+| Query builder insert of 10,000 rows | — | — | 23.93 → 10.46 (2.29×) |
+
+On PHP 8.6 the existing suite measured 0.82–1.32×. Laravel cold connect plus
+`SELECT 1` took 1.86 → 2.27 ms and a raw PDO insert of 10,000 rows took
+5.66 → 6.52 ms. A separate 12-round paired check measured 1.85 → 1.78 ms
+for that cold connection, 4.87 → 4.75 ms for the raw PDO insert and
+5.98 → 6.10 ms for the million-row PDO aggregation. Comparisons across PHP
+versions also include differences in thread safety, PHP builds and host load.
+
+To repeat the typed workloads, install the package dependencies and load the
+paired extensions in PHP. Run each command for the baseline and candidate
+against the same server with `async_insert=0`. The default is `127.0.0.1:9000`.
+
+```bash
+for driver in ext-clickhouse pdo-clickhouse laravel; do
+    php -d memory_limit=768M benchmarks/client-workloads.php "$driver" "$driver.json"
+done
+```
 
 ## Driver comparison
 
